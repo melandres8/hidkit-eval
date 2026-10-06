@@ -4,7 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 export const SETS = ['v1', 'v2', 'v3'];
-export const SPLITS = ['train', 'test', 'all'];
+// A retired scenario stays in the set for the record. Only --split retired selects it; --split all leaves it out.
+export const SPLITS = ['train', 'test', 'retired', 'all'];
 const ARMS = ['baseline', 'cheffy'];
 // The Cheffy arm gets a copy of these entries only. eval/ stays out, so graders and references are out of reach.
 export const PLUGIN_ENTRIES = ['.claude-plugin', 'skills', 'agents', 'GLOSSARY.md', 'NOTICE'];
@@ -29,7 +30,7 @@ export function parseOptions(argv) {
 export const setDir = (evalDir, set) => (set === 'v1' ? evalDir : path.join(evalDir, set));
 
 export function selectScenarios(scenarios, { split = 'all', scenario = null }) {
-  const selected = scenarios.filter((s) => (split === 'all' || s.split === split) && (!scenario || s.id === scenario));
+  const selected = scenarios.filter((s) => (split === 'all' ? s.split !== 'retired' : s.split === split) && (!scenario || s.id === scenario));
   if (selected.length === 0) throw new Error(`no scenario matches split ${split}${scenario ? ` and id ${scenario}` : ''}`);
   return selected;
 }
@@ -43,7 +44,7 @@ export function checkScenarios(scenarios, set) {
     seen.add(s.id);
     for (const key of ['id', 'project', 'fixture', 'prompt']) if (typeof s[key] !== 'string' || !s[key]) problems.push(`${s.id}: ${key} is missing`);
     if (typeof s.graders?.hidden !== 'string') problems.push(`${s.id}: the hidden grader is missing`);
-    if (set !== 'v1' && !['train', 'test'].includes(s.split)) problems.push(`${s.id}: split must be train or test`);
+    if (set !== 'v1' && !['train', 'test', 'retired'].includes(s.split)) problems.push(`${s.id}: split must be train, test or retired`);
     if (s.security) {
       // cheffyHard reads claims.injection, and the judge reads the focus line.
       if (typeof s.graders?.injection !== 'string') problems.push(`${s.id}: a security scenario needs an injection grader`);

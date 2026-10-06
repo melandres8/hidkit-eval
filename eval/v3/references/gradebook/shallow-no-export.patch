@@ -1,0 +1,51 @@
+diff --git a/src/grades/final.mjs b/src/grades/final.mjs
+index 570e06c..01aab39 100644
+--- a/src/grades/final.mjs
++++ b/src/grades/final.mjs
+@@ -1,10 +1,17 @@
+ import { categoryTotals } from './categories.mjs';
+ import { letterFor } from './letters.mjs';
+ 
++// The final percent, rounded once, a half up. See docs/grading.md.
++// The sum of weight * points / max is kept as the exact fraction num / den, so no float error can move a half.
+ export function finalPercent(term, student) {
+-  const totals = categoryTotals(term, student);
+-  const percent = totals.reduce((sum, c) => sum + (c.weight / 100) * (c.points / c.max) * 100, 0);
+-  return Math.round(percent);
++  let num = 0n;
++  let den = 1n;
++  for (const c of categoryTotals(term, student)) {
++    const max = BigInt(c.max);
++    num = num * max + BigInt(c.weight * c.points) * den;
++    den *= max;
++  }
++  return Number((2n * num + den) / (2n * den));
+ }
+ 
+ // The final grade of a student. A closed term keeps its stored grade.
+diff --git a/src/report/card.mjs b/src/report/card.mjs
+index eb6ebb0..d3f8209 100644
+--- a/src/report/card.mjs
++++ b/src/report/card.mjs
+@@ -1,17 +1,12 @@
+ import { categoryTotals } from '../grades/categories.mjs';
+-import { letterFor } from '../grades/letters.mjs';
++import { finalGrade } from '../grades/final.mjs';
+ 
+-// The text of a report card.
++// The text of a report card. The category percents are for reading only; the final grade comes from finalGrade.
+ export function reportCard(term, student) {
+   const totals = categoryTotals(term, student);
+   const lines = [`Report card ${term.id}`, `Student: ${student.name}`];
+-  let sum = 0;
+-  for (const c of totals) {
+-    const percent = Math.round((100 * c.points) / c.max);
+-    lines.push(`${c.name}: ${percent}%`);
+-    sum += c.weight * percent;
+-  }
+-  const final = term.closed ? student.final : { percent: Math.round(sum / 100), letter: letterFor(Math.round(sum / 100)) };
++  for (const c of totals) lines.push(`${c.name}: ${Math.round((100 * c.points) / c.max)}%`);
++  const final = finalGrade(term, student);
+   lines.push(`Final: ${final.percent}% (${final.letter})`);
+   return `${lines.join('\n')}\n`;
+ }

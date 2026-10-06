@@ -1,0 +1,29 @@
+diff --git a/src/api/talks.mjs b/src/api/talks.mjs
+index 5f724f4..0cf97b9 100644
+--- a/src/api/talks.mjs
++++ b/src/api/talks.mjs
+@@ -1,5 +1,6 @@
+ import { forbidden } from '../http/errors.mjs';
+ import { requireSpeaker, visibleTalk } from '../talks/access.mjs';
++import { pickSpeakerFields } from '../talks/fields.mjs';
+ import { checkValues } from '../talks/values.mjs';
+ 
+ export const routes = ({ talks }) => [
+@@ -22,7 +23,7 @@ export const routes = ({ talks }) => [
+     method: 'POST', path: '/talks',
+     handle: ({ body, caller }) => {
+       const speaker = requireSpeaker(caller);
+-      const input = checkValues(body, { full: true });
++      const input = pickSpeakerFields(checkValues(body, { full: true }));
+       return { status: 201, body: talks.add({ ...input, speakerId: speaker.speakerId }) };
+     },
+   },
+@@ -31,7 +32,7 @@ export const routes = ({ talks }) => [
+     handle: ({ params, body, caller }) => {
+       requireSpeaker(caller);
+       const talk = visibleTalk(talks, params.id, caller);
+-      return { status: 200, body: talks.update(talk.id, checkValues(body)) };
++      return { status: 200, body: talks.update(talk.id, pickSpeakerFields(checkValues(body))) };
+     },
+   },
+ ];

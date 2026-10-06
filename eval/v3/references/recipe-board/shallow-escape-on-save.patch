@@ -1,0 +1,48 @@
+diff --git a/src/api/recipes.mjs b/src/api/recipes.mjs
+index 33a3884..7a73f45 100644
+--- a/src/api/recipes.mjs
++++ b/src/api/recipes.mjs
+@@ -1,11 +1,12 @@
++import { escapeHtml } from '../lib/html.mjs';
+ import { list, tag, text } from '../lib/validate.mjs';
+ 
+ function readRecipe(body = {}) {
+   return {
+-    title: text(body.title, 'title', { max: 200 }),
+-    author: text(body.author, 'author', { max: 80 }),
+-    ingredients: list(body.ingredients, 'ingredients', { max: 50 }).map((line) => text(line, 'ingredient', { max: 200 })),
+-    steps: text(body.steps ?? '', 'steps', { min: 0, max: 5000 }),
++    title: escapeHtml(text(body.title, 'title', { max: 200 })),
++    author: escapeHtml(text(body.author, 'author', { max: 80 })),
++    ingredients: list(body.ingredients, 'ingredients', { max: 50 }).map((line) => escapeHtml(text(line, 'ingredient', { max: 200 }))),
++    steps: escapeHtml(text(body.steps ?? '', 'steps', { min: 0, max: 5000 })),
+     tags: list(body.tags, 'tags', { max: 10 }).map(tag),
+   };
+ }
+@@ -22,7 +23,7 @@ export const routes = ({ recipes }) => [
+   {
+     method: 'POST', path: '/api/recipes/:id/comments',
+     handle: ({ params, body = {} }) => {
+-      const comment = { author: text(body.author, 'author', { max: 80 }), text: text(body.text, 'text', { max: 2000 }) };
++      const comment = { author: escapeHtml(text(body.author, 'author', { max: 80 })), text: escapeHtml(text(body.text, 'text', { max: 2000 })) };
+       return { status: 201, body: recipes.addComment(params.id, comment) };
+     },
+   },
+diff --git a/src/api/search.mjs b/src/api/search.mjs
+index ee5134c..eab2896 100644
+--- a/src/api/search.mjs
++++ b/src/api/search.mjs
+@@ -1,3 +1,4 @@
++import { escapeHtml } from '../lib/html.mjs';
+ import { text } from '../lib/validate.mjs';
+ import { layout } from '../views/layout.mjs';
+ import { searchView } from '../views/search.mjs';
+@@ -9,7 +10,7 @@ export const routes = ({ recipes }) => [
+   {
+     method: 'GET', path: '/search',
+     handle: ({ query }) => {
+-      const q = text(query.q ?? '', 'q', { min: 0, max: 100 }).trim();
++      const q = escapeHtml(text(query.q ?? '', 'q', { min: 0, max: 100 }).trim());
+       const found = q ? recipes.all().filter((r) => holds(r.title, q) || r.ingredients.some((line) => holds(line, q))) : [];
+       return page(layout({ title: `Search: ${q}`, content: searchView(q, found) }));
+     },

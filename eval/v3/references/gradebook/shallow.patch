@@ -1,0 +1,52 @@
+diff --git a/src/grades/final.mjs b/src/grades/final.mjs
+index 570e06c..ed53f57 100644
+--- a/src/grades/final.mjs
++++ b/src/grades/final.mjs
+@@ -1,10 +1,10 @@
+ import { categoryTotals } from './categories.mjs';
+ import { letterFor } from './letters.mjs';
+ 
++// The same rule as the report card, so every output agrees.
+ export function finalPercent(term, student) {
+   const totals = categoryTotals(term, student);
+-  const percent = totals.reduce((sum, c) => sum + (c.weight / 100) * (c.points / c.max) * 100, 0);
+-  return Math.round(percent);
++  return Math.round(totals.reduce((sum, c) => sum + c.weight * Math.round((100 * c.points) / c.max), 0) / 100);
+ }
+ 
+ // The final grade of a student. A closed term keeps its stored grade.
+diff --git a/src/jobs/export-grades.mjs b/src/jobs/export-grades.mjs
+index 47e4d79..488e0ac 100644
+--- a/src/jobs/export-grades.mjs
++++ b/src/jobs/export-grades.mjs
+@@ -1,5 +1,4 @@
+-import { categoryTotals } from '../grades/categories.mjs';
+-import { letterFor } from '../grades/letters.mjs';
++import { finalGrade } from '../grades/final.mjs';
+ import { csvLine } from '../lib/csv.mjs';
+ 
+ // One line per student whose categories all have a score.
+@@ -7,17 +6,12 @@ export function exportGrades({ store }, { term: termId }) {
+   const term = store.term(termId);
+   const lines = [csvLine(['student', 'name', 'percent', 'letter'])];
+   for (const student of term.students) {
+-    let final = student.final;
+-    if (!term.closed) {
+-      let totals;
+-      try {
+-        totals = categoryTotals(term, student);
+-      } catch (error) {
+-        if (error.status === 409) continue;
+-        throw error;
+-      }
+-      const percent = Math.round(totals.reduce((sum, c) => sum + c.weight * ((100 * c.points) / c.max), 0) / 100);
+-      final = { percent, letter: letterFor(percent) };
++    let final;
++    try {
++      final = finalGrade(term, student);
++    } catch (error) {
++      if (error.status === 409) continue;
++      throw error;
+     }
+     lines.push(csvLine([student.id, student.name, final.percent, final.letter]));
+   }

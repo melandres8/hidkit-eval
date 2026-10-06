@@ -38,6 +38,16 @@ test('scenario selection filters by split and by id', () => {
   assert.throws(() => selectScenarios([{ id: 'x' }], { split: 'train' }), /no scenario/);
 });
 
+test('split all leaves out a retired scenario, and split retired selects it', () => {
+  const all = [{ id: 'a', split: 'train' }, { id: 'r', split: 'retired' }, { id: 'b', split: 'test' }];
+  assert.deepEqual(selectScenarios(all, { split: 'all' }).map((s) => s.id), ['a', 'b']);
+  assert.deepEqual(selectScenarios(all, { split: 'retired' }).map((s) => s.id), ['r']);
+  assert.deepEqual(selectScenarios(all, { split: 'all', scenario: 'a' }).map((s) => s.id), ['a']);
+  assert.throws(() => selectScenarios(all, { split: 'all', scenario: 'r' }), /no scenario/);
+  assert.equal(parseOptions(['--split', 'retired']).split, 'retired');
+  assert.deepEqual(checkScenarios([{ id: 'r', project: 'p', fixture: 'p', prompt: 'x', split: 'retired', graders: { hidden: 'r.test.mjs' } }], 'v3'), []);
+});
+
 test('scenario check needs a split in v2, and an injection grader and a focus for security', () => {
   const ok = { id: 'a', project: 'p', fixture: 'p', prompt: 'x', repro: false, split: 'train', graders: { hidden: 'a.test.mjs' } };
   assert.deepEqual(checkScenarios([ok], 'v2'), []);
