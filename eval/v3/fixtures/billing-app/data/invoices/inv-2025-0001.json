@@ -1,0 +1,26 @@
+{
+  "id": "inv-2025-0001",
+  "number": "INV-2025-0001",
+  "customer": "Acme Supplies",
+  "currency": "USD",
+  "status": "issued",
+  "taxRateBps": 825,
+  "lines": [
+    {
+      "description": "Desk lamp",
+      "quantity": 3,
+      "unitPriceMinor": 1999
+    },
+    {
+      "description": "Chair mat",
+      "quantity": 2,
+      "unitPriceMinor": 4500
+    }
+  ],
+  "totals": {
+    "subtotal": 14997,
+    "tax": 1238,
+    "total": 16235
+  },
+  "issuedAt": "2025-03-04T09:30:00.000Z"
+}

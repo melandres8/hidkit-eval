@@ -1,0 +1,187 @@
+diff --git a/docs/config.md b/docs/config.md
+index 9897f86..e0d1344 100644
+--- a/docs/config.md
++++ b/docs/config.md
+@@ -6,7 +6,7 @@ The worker reads one JSON file. Defaults fill the keys that the file leaves out.
+ 
+ | Key | Meaning | Default |
+ |---|---|---|
+-| `db.url` | URL of the database. Required. | none |
++| `database.connectionString` | URL of the database. Required. | none |
+ | `cache.url` | URL of the cache. | none |
+ | `queue.name` | Name of the queue. Required. | `jobs` |
+ | `queue.pollIntervalMs` | Time between two reads of the queue. | `500` |
+@@ -17,11 +17,17 @@ The worker reads one JSON file. Defaults fill the keys that the file leaves out.
+ 
+ | Variable | Key |
+ |---|---|
+-| `WORKER_DB_URL` | the database URL |
++| `WORKER_DB_URL` | `database.connectionString` |
+ | `WORKER_CACHE_URL` | `cache.url` |
+ | `WORKER_QUEUE` | `queue.name` |
+ | `WORKER_LOG_LEVEL` | `log.level` |
+ 
++## Renamed keys
++
++| Old key | New key |
++|---|---|
++| `db.url` | `database.connectionString` |
++
+ ## Deprecation policy
+ 
+ A release can rename a key. Follow these rules when it does.
+diff --git a/src/cli/commands/config.mjs b/src/cli/commands/config.mjs
+index 868bff7..d1eeb6a 100644
+--- a/src/cli/commands/config.mjs
++++ b/src/cli/commands/config.mjs
+@@ -1,3 +1,4 @@
++import { RENAMED } from '../../config/deprecated.mjs';
+ import { get } from '../../config/get.mjs';
+ import { check } from '../../config/schema.mjs';
+ import { redact } from '../../config/redact.mjs';
+@@ -10,7 +11,9 @@ export function configCommand([action, file, key], io) {
+   }
+   const { config } = workerFor(file, io);
+   if (action === 'get') {
+-    const value = get(redact(config), key);
++    const current = RENAMED[key];
++    if (current) io.stderr.write(`warning: config key "${key}" is deprecated. Use "${current}".\n`);
++    const value = get(redact(config), current ?? key);
+     if (value === undefined) {
+       io.stderr.write(`error: no value for key "${key}"\n`);
+       return 1;
+diff --git a/b/src/config/deprecated.mjs b/src/config/deprecated.mjs
+new file mode 100644
+index 0000000..b72b436
+--- /dev/null
++++ b/src/config/deprecated.mjs
+@@ -0,0 +1,22 @@
++import { get, set, unset } from './get.mjs';
++
++// Keys that a release renamed. The old key keeps working. See docs/config.md.
++export const RENAMED = {
++  'db.url': 'database.connectionString',
++};
++
++// Moves the value of each old key to its new key and warns once for each old key. Changes the object.
++export function applyRenames(raw, warn) {
++  for (const [oldKey, newKey] of Object.entries(RENAMED)) {
++    const value = get(raw, oldKey);
++    if (value === undefined) continue;
++    if (get(raw, newKey) === undefined) {
++      set(raw, newKey, value);
++      warn(`config key "${oldKey}" is deprecated. Use "${newKey}".`);
++    } else {
++      warn(`config key "${oldKey}" is deprecated and "${newKey}" is also set. The value of "${newKey}" wins.`);
++    }
++    unset(raw, oldKey);
++  }
++  return raw;
++}
+diff --git a/src/config/env.mjs b/src/config/env.mjs
+index 68eaeca..0cd19e2 100644
+--- a/src/config/env.mjs
++++ b/src/config/env.mjs
+@@ -1,6 +1,6 @@
+ // Maps an environment variable to the key it overrides.
+ export const ENV = {
+-  WORKER_DB_URL: 'db.url',
++  WORKER_DB_URL: 'database.connectionString',
+   WORKER_CACHE_URL: 'cache.url',
+   WORKER_QUEUE: 'queue.name',
+   WORKER_LOG_LEVEL: 'log.level',
+diff --git a/src/config/get.mjs b/src/config/get.mjs
+index 7173716..8bec49b 100644
+--- a/src/config/get.mjs
++++ b/src/config/get.mjs
+@@ -9,3 +9,13 @@ export function set(object, path, value) {
+   const target = parts.reduce((node, part) => (node[part] = node[part] ?? {}), object);
+   target[last] = value;
+ }
++
++// Removes a key. An empty parent object goes with it.
++export function unset(object, path) {
++  const parts = path.split('.');
++  const last = parts.pop();
++  const parent = parts.length ? get(object, parts.join('.')) : object;
++  if (parent === null || typeof parent !== 'object') return;
++  delete parent[last];
++  if (parts.length && Object.keys(parent).length === 0) unset(object, parts.join('.'));
++}
+diff --git a/src/config/load.mjs b/src/config/load.mjs
+index 3c89f9c..4973b68 100644
+--- a/src/config/load.mjs
++++ b/src/config/load.mjs
+@@ -1,4 +1,5 @@
+ import fs from 'node:fs';
++import { applyRenames } from './deprecated.mjs';
+ import { DEFAULTS } from './defaults.mjs';
+ import { ENV } from './env.mjs';
+ import { set } from './get.mjs';
+@@ -15,7 +16,7 @@ function merge(base, extra) {
+ 
+ // Reads a settings file and returns the settings. Calls warn(message) for each problem that does not stop the load.
+ export function loadConfig(file, { env = process.env, warn = () => {} } = {}) {
+-  const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
++  const raw = applyRenames(JSON.parse(fs.readFileSync(file, 'utf8')), warn);
+   for (const key of Object.keys(raw)) {
+     if (!SECTIONS.includes(key)) warn(`unknown config section "${key}"`);
+   }
+diff --git a/src/config/redact.mjs b/src/config/redact.mjs
+index 329432c..61705a0 100644
+--- a/src/config/redact.mjs
++++ b/src/config/redact.mjs
+@@ -1,8 +1,7 @@
+ import { get, set } from './get.mjs';
+ 
+-// The sections whose url key holds a URL that can carry a password.
+-const SECTIONS_WITH_URLS = ['db', 'cache'];
+-const URL_PATHS = SECTIONS_WITH_URLS.map((section) => `${section}.url`);
++// The keys that hold a URL that can carry a password.
++const URL_PATHS = ['database.connectionString', 'cache.url'];
+ 
+ // Replaces the password of a URL with ***.
+ export function maskUrl(text) {
+diff --git a/src/config/schema.mjs b/src/config/schema.mjs
+index a2d14ac..1b8d16e 100644
+--- a/src/config/schema.mjs
++++ b/src/config/schema.mjs
+@@ -1,10 +1,10 @@
+ import { get } from './get.mjs';
+ 
+ // The top-level sections that a settings file may have.
+-export const SECTIONS = ['db', 'cache', 'queue', 'pool', 'log'];
++export const SECTIONS = ['database', 'cache', 'queue', 'pool', 'log'];
+ 
+-const REQUIRED = ['db.url', 'queue.name'];
+-const URL_KEYS = ['db.url', 'cache.url'];
++const REQUIRED = ['database.connectionString', 'queue.name'];
++const URL_KEYS = ['database.connectionString', 'cache.url'];
+ const LEVELS = ['debug', 'info', 'warn', 'error'];
+ 
+ // Returns a list of problems. An empty list means the settings are valid.
+diff --git a/src/db/connect.mjs b/src/db/connect.mjs
+index 0021e77..7df314e 100644
+--- a/src/db/connect.mjs
++++ b/src/db/connect.mjs
+@@ -1,6 +1,6 @@
+ // Opens the database connection through the driver.
+ export function connect(config, driver) {
+-  const url = config.db?.url;
++  const url = config.database?.connectionString;
+   if (!url) throw new Error('the database url is not set');
+   return driver.connect(url);
+ }
+diff --git a/src/db/migrate.mjs b/src/db/migrate.mjs
+index fad3407..1bf2153 100644
+--- a/src/db/migrate.mjs
++++ b/src/db/migrate.mjs
+@@ -2,7 +2,7 @@ import { maskUrl } from '../config/redact.mjs';
+ 
+ // Runs the migrations. The target is safe to print.
+ export function migrate(config, driver) {
+-  const url = config.db?.url;
++  const url = config.database?.connectionString;
+   if (!url) throw new Error('the database url is not set');
+   return { target: maskUrl(url), applied: driver.migrate(url) };
+ }

@@ -1,0 +1,75 @@
+diff --git a/src/jobs/heat-alert.mjs b/src/jobs/heat-alert.mjs
+index 12b8c14..8be662e 100644
+--- a/src/jobs/heat-alert.mjs
++++ b/src/jobs/heat-alert.mjs
+@@ -1,7 +1,7 @@
+ import { badRequest } from '../http/errors.mjs';
+ import { ALERT_ABOVE } from '../lib/config.mjs';
+ import { requireDate } from '../lib/validate.mjs';
+-import { hourBuckets } from '../rollup/hours.mjs';
++import { meanOf, sumOf } from '../rollup/mean.mjs';
+ import { utcDay } from '../rollup/range.mjs';
+ 
+ // Finds the sensors whose mean for the day is above the alert level.
+@@ -10,10 +10,8 @@ export function heatAlert({ store }, { date } = {}) {
+   const day = requireDate(date);
+   const { from, to } = utcDay(day);
+   const alerts = store.sensors().filter((sensor) => {
+-    const buckets = hourBuckets(store.between(sensor, from, to));
+-    if (buckets.length === 0) return false;
+-    const mean = buckets.reduce((sum, b) => sum + b.mean, 0) / buckets.length;
+-    return mean > ALERT_ABOVE;
++    const readings = store.between(sensor, from, to);
++    return readings.length > 0 && meanOf(sumOf(readings), readings.length) > ALERT_ABOVE;
+   });
+   return { date: day, alerts };
+ }
+diff --git a/src/rollup/day.mjs b/src/rollup/day.mjs
+index 099fde1..7b59f47 100644
+--- a/src/rollup/day.mjs
++++ b/src/rollup/day.mjs
+@@ -1,9 +1,7 @@
+-import { hourBuckets } from './hours.mjs';
++import { meanOf, sumOf } from './mean.mjs';
+ 
+ // The count and the mean of the readings of one day. The mean is null when there are no readings.
+ export function dayRollup(readings) {
+-  const buckets = hourBuckets(readings);
+-  if (buckets.length === 0) return { count: 0, mean: null };
+-  const total = buckets.reduce((sum, b) => sum + b.mean, 0);
+-  return { count: readings.length, mean: Math.round(total / buckets.length) };
++  if (readings.length === 0) return { count: 0, mean: null };
++  return { count: readings.length, mean: meanOf(sumOf(readings), readings.length) };
+ }
+diff --git a/src/rollup/mean.mjs b/src/rollup/mean.mjs
+index cdc7caa..6005151 100644
+--- a/src/rollup/mean.mjs
++++ b/src/rollup/mean.mjs
+@@ -1,4 +1,8 @@
+ // The mean of a sum and a count, as a whole number of hundredths.
+-export const meanOf = (sum, count) => Math.round(sum / count);
++// A tie goes away from zero. The sum and the count are whole numbers, so the arithmetic is exact.
++export const meanOf = (sum, count) => {
++  const magnitude = Math.floor((2 * Math.abs(sum) + count) / (2 * count));
++  return sum < 0 && magnitude !== 0 ? -magnitude : magnitude;
++};
+ 
+ export const sumOf = (readings) => readings.reduce((total, r) => total + r.hundredths, 0);
+diff --git a/src/rollup/week.mjs b/src/rollup/week.mjs
+index 3b9f8d0..e62887c 100644
+--- a/src/rollup/week.mjs
++++ b/src/rollup/week.mjs
+@@ -1,9 +1,8 @@
+-import { dayRollup } from './day.mjs';
++import { meanOf, sumOf } from './mean.mjs';
+ 
+ // The count and the mean of a week. `days` is a list of the readings of each day.
+ export function weekRollup(days) {
+-  const rolled = days.map((readings) => dayRollup(readings)).filter((d) => d.count > 0);
+-  if (rolled.length === 0) return { count: 0, mean: null };
+-  const total = rolled.reduce((sum, d) => sum + d.mean, 0);
+-  return { count: rolled.reduce((sum, d) => sum + d.count, 0), mean: Math.round(total / rolled.length) };
++  const all = days.flat();
++  if (all.length === 0) return { count: 0, mean: null };
++  return { count: all.length, mean: meanOf(sumOf(all), all.length) };
+ }

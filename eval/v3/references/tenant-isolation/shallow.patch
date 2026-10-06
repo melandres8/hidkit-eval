@@ -1,0 +1,17 @@
+diff --git a/src/jobs/export-projects.mjs b/src/jobs/export-projects.mjs
+index f499776..dfa8dec 100644
+--- a/src/jobs/export-projects.mjs
++++ b/src/jobs/export-projects.mjs
+@@ -1,8 +1,9 @@
+ import { toCsv } from '../lib/csv.mjs';
++import { scopeToTenant } from '../tenancy/scope.mjs';
+ 
+-// Builds the CSV of the projects of a tenant, one row for each project.
++// Builds the CSV of the projects of the tenant of the caller, one row for each project.
+ export function exportProjects({ db }, { caller }) {
+-  const projects = db.find('projects');
+-  const rows = projects.map((p) => [p.id, p.name, p.status, p.ownerId, db.find('tasks', { where: { projectId: p.id } }).length]);
++  const projects = db.find('projects', scopeToTenant({}, caller));
++  const rows = projects.map((p) => [p.id, p.name, p.status, p.ownerId, db.find('tasks', scopeToTenant({ where: { projectId: p.id } }, caller)).length]);
+   return { filename: `projects-${caller.tenantId}.csv`, csv: toCsv(['id', 'name', 'status', 'owner', 'tasks'], rows) };
+ }

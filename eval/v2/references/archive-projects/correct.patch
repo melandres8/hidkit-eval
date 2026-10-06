@@ -1,0 +1,73 @@
+diff --git a/src/routes.mjs b/src/routes.mjs
+index 7f48541..689e6d6 100644
+--- a/src/routes.mjs
++++ b/src/routes.mjs
+@@ -4,7 +4,7 @@ import { projectStats } from './stats.mjs';
+ const notFound = { status: 404, body: { error: 'not found' } };
+ 
+ export function route(store, { method, path, query = {} }) {
+-  if (method === 'GET' && path === '/projects') return { status: 200, body: store.all() };
++  if (method === 'GET' && path === '/projects') return { status: 200, body: store.visible() };
+   if (method === 'GET' && path === '/projects/search') return { status: 200, body: searchProjects(store, query.q) };
+   if (method === 'GET' && path === '/stats') return { status: 200, body: projectStats(store) };
+   const m = /^\/projects\/(\d+)$/.exec(path);
+@@ -12,8 +12,8 @@ export function route(store, { method, path, query = {} }) {
+   const id = Number(m[1]);
+   if (method === 'GET') {
+     const project = store.get(id);
+-    return project ? { status: 200, body: project } : notFound;
++    return project && !project.archivedAt ? { status: 200, body: project } : notFound;
+   }
+-  if (method === 'DELETE') return store.remove(id) ? { status: 204 } : notFound;
++  if (method === 'DELETE') return store.archive(id) ? { status: 204 } : notFound;
+   return notFound;
+ }
+diff --git a/src/search.mjs b/src/search.mjs
+index db88495..8c6ae33 100644
+--- a/src/search.mjs
++++ b/src/search.mjs
+@@ -1,7 +1,7 @@
+ export function searchProjects(store, q = '') {
+   const needle = q.toLowerCase();
+   const found = [];
+-  for (const project of store.all()) {
++  for (const project of store.visible()) {
+     if (project.name.toLowerCase().includes(needle)) found.push(project);
+   }
+   return found;
+diff --git a/src/stats.mjs b/src/stats.mjs
+index 737f285..c3512e5 100644
+--- a/src/stats.mjs
++++ b/src/stats.mjs
+@@ -1,6 +1,6 @@
+ // Counts projects by status, for the dashboard.
+ export function projectStats(store) {
+   const counts = {};
+-  for (const project of store.all()) counts[project.status] = (counts[project.status] ?? 0) + 1;
++  for (const project of store.visible()) counts[project.status] = (counts[project.status] ?? 0) + 1;
+   return counts;
+ }
+diff --git a/src/store.mjs b/src/store.mjs
+index 436d532..6335589 100644
+--- a/src/store.mjs
++++ b/src/store.mjs
+@@ -1,4 +1,5 @@
+ // In-memory project store. A project is { id, name, status }, and status is "active" or "done".
++// archive() keeps the record and sets archivedAt, so support can restore it. visible() leaves archived projects out.
+ export function createStore() {
+   const projects = new Map();
+   let nextId = 1;
+@@ -10,6 +11,12 @@ export function createStore() {
+     },
+     get: (id) => projects.get(id) ?? null,
+     all: () => [...projects.values()],
+-    remove: (id) => projects.delete(id),
++    visible: () => [...projects.values()].filter((p) => !p.archivedAt),
++    archive(id, now = new Date()) {
++      const project = projects.get(id);
++      if (!project || project.archivedAt) return false;
++      project.archivedAt = now.toISOString();
++      return true;
++    },
+   };
+ }

@@ -1,0 +1,10 @@
+{
+  "name": "hidkit-eval",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "validate": "node eval/v2/validate.mjs && node eval/v3/validate.mjs"
+  }
+}

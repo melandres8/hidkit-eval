@@ -1,0 +1,23 @@
+diff --git a/bin/todo.mjs b/bin/todo.mjs
+index 4fd3ef8..391eb86 100755
+--- a/bin/todo.mjs
++++ b/bin/todo.mjs
+@@ -6,14 +6,16 @@ const file = process.env.TODO_FILE ?? 'todos.json';
+ const [command, ...rest] = process.argv.slice(2);
+ 
+ let lines;
+-if (command === 'list') {
++if (command === 'list' && rest.length === 1 && rest[0] === '--json') {
++  lines = [JSON.stringify(load(file))];
++} else if (command === 'list' && rest.length === 0) {
+   lines = list(load(file));
+ } else if (command === 'add' && rest.length) {
+   const todos = load(file);
+   lines = add(todos, rest.join(' '));
+   save(file, todos);
+ } else {
+-  console.error('usage: todo list | todo add <title>');
++  console.error('usage: todo list [--json] | todo add <title>');
+   process.exit(2);
+ }
+ for (const line of lines) console.log(line);

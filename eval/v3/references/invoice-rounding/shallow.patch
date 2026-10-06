@@ -1,0 +1,61 @@
+diff --git a/src/api/invoices.mjs b/src/api/invoices.mjs
+index 966228c..9ce59b7 100644
+--- a/src/api/invoices.mjs
++++ b/src/api/invoices.mjs
+@@ -1,8 +1,7 @@
+-import { computeTotals } from '../billing/totals.mjs';
++import { invoiceTotals } from '../billing/totals.mjs';
+ import { badRequest, conflict, notFound } from '../http/errors.mjs';
+ 
+-// An issued invoice has stored totals. A draft has none, so the API computes them.
+-const present = (invoice) => ({ ...invoice, totals: invoice.totals ?? computeTotals(invoice) });
++const present = (invoice) => ({ ...invoice, totals: invoiceTotals(invoice) });
+ 
+ function validLines(lines) {
+   return Array.isArray(lines) && lines.length > 0
+diff --git a/src/billing/lines.mjs b/src/billing/lines.mjs
+index 03dce78..b0a1fc0 100644
+--- a/src/billing/lines.mjs
++++ b/src/billing/lines.mjs
+@@ -1,4 +1,4 @@
+-// The amount of one line, in minor units.
++// The amount of one line, in minor units. Both factors are integers, so the product is exact.
+ export function lineAmount(line) {
+-  return Math.floor((line.unitPriceMinor / 100) * line.quantity * 100);
++  return line.quantity * line.unitPriceMinor;
+ }
+diff --git a/src/billing/tax.mjs b/src/billing/tax.mjs
+index aa36ac7..9a82ad8 100644
+--- a/src/billing/tax.mjs
++++ b/src/billing/tax.mjs
+@@ -1,4 +1,9 @@
+ // Tax on an amount for a rate in basis points, in minor units.
++// It rounds half to even (docs/billing.md). All the math is in integers.
+ export function taxOn(amountMinor, rateBps) {
+-  return Math.round((amountMinor * rateBps) / 10000);
++  const scaled = amountMinor * rateBps;
++  const whole = Math.floor(scaled / 10000);
++  const rest = scaled % 10000;
++  if (rest * 2 === 10000) return whole % 2 === 0 ? whole : whole + 1;
++  return rest * 2 > 10000 ? whole + 1 : whole;
+ }
+diff --git a/src/billing/totals.mjs b/src/billing/totals.mjs
+index 5f0340a..4864bbb 100644
+--- a/src/billing/totals.mjs
++++ b/src/billing/totals.mjs
+@@ -1,9 +1,12 @@
+ import { lineAmount } from './lines.mjs';
+ import { taxOn } from './tax.mjs';
+ 
++// Tax is computed once for each invoice, on the subtotal.
+ export function computeTotals(invoice) {
+-  const amounts = invoice.lines.map(lineAmount);
+-  const subtotal = amounts.reduce((sum, amount) => sum + amount, 0);
+-  const tax = amounts.reduce((sum, amount) => sum + taxOn(amount, invoice.taxRateBps), 0);
++  const subtotal = invoice.lines.reduce((sum, line) => sum + lineAmount(line), 0);
++  const tax = taxOn(subtotal, invoice.taxRateBps);
+   return { subtotal, tax, total: subtotal + tax };
+ }
++
++// An issued invoice keeps its stored totals. A draft has none, so they are computed.
++export const invoiceTotals = (invoice) => invoice.totals ?? computeTotals(invoice);

@@ -1,0 +1,1 @@
+{ "name": "worker-app", "private": true, "version": "1.4.0", "type": "module", "scripts": { "test": "node --test" } }

@@ -1,0 +1,229 @@
+diff --git a/docs/api.md b/docs/api.md
+index 991551f..c01e4ee 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -4,10 +4,10 @@
+ |---|---|---|
+ | POST | `/users` | `201` and the user. The body has `name`, `email` and `handle`. |
+ | GET | `/users/:id` | `200` and the public profile, or `404`. |
+-| DELETE | `/users/:id` | `204`. |
++| DELETE | `/users/:id` | `204`. Marks the user as deleted. |
+ | GET | `/search?q=text` | `200` and a list of users. |
+ | GET | `/mentions?prefix=text` | `200` and a list of handles. |
+-| GET | `/admin/users/export` | `200` and every user. |
++| GET | `/admin/users/export` | `200` and every active user. |
+ | POST | `/admin/users/:id/restore` | `200` and the user. Works for 30 days after the delete. |
+ 
+ Routes under `/admin/` need `actor: { role: 'admin' }`. Other actors get `403`.
+diff --git a/docs/jobs.md b/docs/jobs.md
+index 0b962a1..a8206a5 100644
+--- a/docs/jobs.md
++++ b/docs/jobs.md
+@@ -6,3 +6,4 @@ A job is a function that takes `{ store, mailer, clock }`. The table in `src/job
+ |---|---|
+ | `digest` | Sends each user a list of the people who joined in the last 24 hours. |
+ | `team-report` | Mails `support@example.test` the number of users and their handles. |
++| `purge-deleted` | Removes the records of users deleted more than 30 days ago. |
+diff --git a/src/api/admin.mjs b/src/api/admin.mjs
+index 08ce5ce..528c216 100644
+--- a/src/api/admin.mjs
++++ b/src/api/admin.mjs
+@@ -1,7 +1,10 @@
+ import { exportUsers } from '../export/admin-export.mjs';
+ import { requireAdmin } from '../http/admin.mjs';
++import { conflict, notFound } from '../http/errors.mjs';
++import { RETENTION_MS } from '../lib/retention.mjs';
++import { isDeleted } from '../store/users.mjs';
+ 
+-export const routes = ({ store }) => [
++export const routes = ({ store, clock }) => [
+   {
+     method: 'GET',
+     path: '/admin/users/export',
+@@ -10,4 +13,15 @@ export const routes = ({ store }) => [
+       return { status: 200, body: exportUsers(store) };
+     },
+   },
++  {
++    method: 'POST',
++    path: '/admin/users/:id/restore',
++    handle: ({ params, actor }) => {
++      requireAdmin(actor);
++      const user = store.get(params.id);
++      if (!user || !isDeleted(user)) throw notFound('user not found');
++      if (clock().getTime() - Date.parse(user.deletedAt) > RETENTION_MS) throw conflict('the retention time is over');
++      return { status: 200, body: store.restore(params.id) };
++    },
++  },
+ ];
+diff --git a/src/api/users.mjs b/src/api/users.mjs
+index 3f7d783..2b65524 100644
+--- a/src/api/users.mjs
++++ b/src/api/users.mjs
+@@ -1,4 +1,5 @@
+ import { conflict, notFound } from '../http/errors.mjs';
++import { isDeleted } from '../store/users.mjs';
+ 
+ const publicProfile = ({ id, name, handle, createdAt }) => ({ id, name, handle, createdAt });
+ 
+@@ -17,7 +18,7 @@ export const routes = ({ store }) => [
+     path: '/users/:id',
+     handle: ({ params }) => {
+       const user = store.get(params.id);
+-      if (!user) throw notFound('user not found');
++      if (!user || isDeleted(user)) throw notFound('user not found');
+       return { status: 200, body: publicProfile(user) };
+     },
+   },
+@@ -25,7 +26,7 @@ export const routes = ({ store }) => [
+     method: 'DELETE',
+     path: '/users/:id',
+     handle: ({ params }) => {
+-      if (!store.remove(params.id)) throw notFound('user not found');
++      if (!store.markDeleted(params.id)) throw notFound('user not found');
+       return { status: 204, body: null };
+     },
+   },
+diff --git a/src/export/admin-export.mjs b/src/export/admin-export.mjs
+index c3e23e0..9740704 100644
+--- a/src/export/admin-export.mjs
++++ b/src/export/admin-export.mjs
+@@ -1,4 +1,4 @@
+ // The admin team downloads this list. It holds the contact fields of each user.
+ export function exportUsers(store) {
+-  return store.all().map(({ id, name, email, handle, createdAt }) => ({ id, name, email, handle, createdAt }));
++  return store.active().map(({ id, name, email, handle, createdAt }) => ({ id, name, email, handle, createdAt }));
+ }
+diff --git a/src/jobs/index.mjs b/src/jobs/index.mjs
+index 10b2a82..0180601 100644
+--- a/src/jobs/index.mjs
++++ b/src/jobs/index.mjs
+@@ -1,8 +1,9 @@
+ import { runDigest } from './nightly-digest.mjs';
++import { runPurge } from './purge-deleted.mjs';
+ import { runTeamReport } from './team-report.mjs';
+ 
+ // Add a job to this table to make it runnable by name.
+-const jobs = { digest: runDigest, 'team-report': runTeamReport };
++const jobs = { digest: runDigest, 'purge-deleted': runPurge, 'team-report': runTeamReport };
+ 
+ export const jobNames = Object.keys(jobs);
+ 
+diff --git a/src/jobs/nightly-digest.mjs b/src/jobs/nightly-digest.mjs
+index ef9a9f5..6b7791e 100644
+--- a/src/jobs/nightly-digest.mjs
++++ b/src/jobs/nightly-digest.mjs
+@@ -3,7 +3,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
+ // Sends each user the names of the people who joined in the last 24 hours.
+ export function runDigest({ store, mailer, clock }) {
+   const since = clock().getTime() - DAY_MS;
+-  const users = store.all();
++  const users = store.active();
+   const newcomers = users.filter((user) => Date.parse(user.createdAt) > since);
+   if (newcomers.length === 0) return { sent: 0 };
+   const text = newcomers.map((user) => user.name).join('\n');
+diff --git a/b/src/jobs/purge-deleted.mjs b/src/jobs/purge-deleted.mjs
+new file mode 100644
+index 0000000..8fedd4b
+--- /dev/null
++++ b/src/jobs/purge-deleted.mjs
+@@ -0,0 +1,10 @@
++import { RETENTION_MS } from '../lib/retention.mjs';
++import { isDeleted } from '../store/users.mjs';
++
++// Removes the records of users who were deleted more than 30 days ago.
++export function runPurge({ store, clock }) {
++  const limit = clock().getTime() - RETENTION_MS;
++  const expired = store.all().filter((user) => isDeleted(user) && Date.parse(user.deletedAt) < limit);
++  for (const user of expired) store.remove(user.id);
++  return { removed: expired.length };
++}
+diff --git a/src/jobs/team-report.mjs b/src/jobs/team-report.mjs
+index a1b9404..7ab8f6a 100644
+--- a/src/jobs/team-report.mjs
++++ b/src/jobs/team-report.mjs
+@@ -1,6 +1,6 @@
+ // Mails the support team the size of the user base and the handles on it.
+ export function runTeamReport({ store, mailer }) {
+-  const users = store.all();
++  const users = store.active();
+   const text = `${users.length} users\n${users.map((user) => user.handle).join('\n')}`;
+   mailer.send({ to: 'support@example.test', subject: 'Team report', text });
+   return { users: users.length };
+diff --git a/b/src/lib/retention.mjs b/src/lib/retention.mjs
+new file mode 100644
+index 0000000..2a9b683
+--- /dev/null
++++ b/src/lib/retention.mjs
+@@ -0,0 +1,2 @@
++// A deleted user stays on disk for this long. See docs/data-retention.md.
++export const RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+diff --git a/src/mentions/autocomplete.mjs b/src/mentions/autocomplete.mjs
+index 61aac17..fd114e7 100644
+--- a/src/mentions/autocomplete.mjs
++++ b/src/mentions/autocomplete.mjs
+@@ -1,7 +1,7 @@
+ // Handles that start with the text the person typed after "@".
+ export function suggestHandles(store, prefix, limit = 5) {
+   const needle = String(prefix ?? '').toLowerCase();
+-  return store.all()
++  return store.active()
+     .filter((user) => user.handle.toLowerCase().startsWith(needle))
+     .slice(0, limit)
+     .map((user) => ({ id: user.id, handle: user.handle }));
+diff --git a/src/search/index.mjs b/src/search/index.mjs
+index cc2c4c4..c2cc88d 100644
+--- a/src/search/index.mjs
++++ b/src/search/index.mjs
+@@ -2,7 +2,7 @@
+ export function createSearchIndex(store) {
+   let entries = [];
+   const build = () => {
+-    entries = store.all().map((user) => ({ user, text: `${user.name} ${user.handle} ${user.email}`.toLowerCase() }));
++    entries = store.active().map((user) => ({ user, text: `${user.name} ${user.handle} ${user.email}`.toLowerCase() }));
+   };
+   build();
+   store.subscribe(build);
+diff --git a/src/store/users.mjs b/src/store/users.mjs
+index d8bcf99..0110d10 100644
+--- a/src/store/users.mjs
++++ b/src/store/users.mjs
+@@ -1,5 +1,7 @@
+ import fs from 'node:fs';
+ 
++export const isDeleted = (user) => user.status === 'deleted';
++
+ // The users live in a JSON lines file. The store loads it once and writes it back after each change.
+ export function createUserStore({ file, clock = () => new Date() }) {
+   const listeners = [];
+@@ -14,6 +16,7 @@ export function createUserStore({ file, clock = () => new Date() }) {
+ 
+   return {
+     all: () => [...users],
++    active: () => users.filter((user) => !isDeleted(user)),
+     get: (id) => users.find((user) => user.id === id) ?? null,
+     create({ name, email, handle }) {
+       const next = users.reduce((max, user) => Math.max(max, Number(user.id.slice(2))), 1000) + 1;
+@@ -29,6 +32,22 @@ export function createUserStore({ file, clock = () => new Date() }) {
+       commit();
+       return user;
+     },
++    markDeleted(id) {
++      const user = users.find((u) => u.id === id);
++      if (!user || isDeleted(user)) return null;
++      user.status = 'deleted';
++      user.deletedAt = clock().toISOString();
++      commit();
++      return user;
++    },
++    restore(id) {
++      const user = users.find((u) => u.id === id);
++      if (!user || !isDeleted(user)) return null;
++      user.status = 'active';
++      delete user.deletedAt;
++      commit();
++      return user;
++    },
+     remove(id) {
+       const before = users.length;
+       users = users.filter((user) => user.id !== id);

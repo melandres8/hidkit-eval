@@ -1,0 +1,26 @@
+{
+  "id": "inv-2025-0002",
+  "number": "INV-2025-0002",
+  "customer": "Bluebird Cafe",
+  "currency": "USD",
+  "status": "issued",
+  "taxRateBps": 1000,
+  "lines": [
+    {
+      "description": "Coffee beans 250g",
+      "quantity": 12,
+      "unitPriceMinor": 350
+    },
+    {
+      "description": "Filter pack",
+      "quantity": 4,
+      "unitPriceMinor": 1250
+    }
+  ],
+  "totals": {
+    "subtotal": 9200,
+    "tax": 920,
+    "total": 10120
+  },
+  "issuedAt": "2025-04-11T14:05:00.000Z"
+}

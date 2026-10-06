@@ -1,0 +1,26 @@
+diff --git a/src/profile.mjs b/src/profile.mjs
+index 9ee9a8d..b13a1da 100644
+--- a/src/profile.mjs
++++ b/src/profile.mjs
+@@ -1,5 +1,8 @@
++import { forgetUser } from './users.mjs';
++
+ export function renameUser(db, id, name) {
+   const trimmed = String(name ?? '').trim();
+   if (!trimmed) throw new RangeError('name must not be empty');
+   db.setUserName(id, trimmed);
++  forgetUser(db, id);
+ }
+diff --git a/src/users.mjs b/src/users.mjs
+index bd0a23d..74201f4 100644
+--- a/src/users.mjs
++++ b/src/users.mjs
+@@ -11,3 +11,8 @@ export function userById(db, id) {
+   if (!byId.has(id)) byId.set(id, db.getUser(id));
+   return byId.get(id);
+ }
++
++// Call after a change to a user, so the next read gets the new values.
++export function forgetUser(db, id) {
++  cache.get(db)?.delete(id);
++}

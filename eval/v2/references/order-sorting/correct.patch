@@ -1,0 +1,46 @@
+diff --git a/src/orders.mjs b/src/orders.mjs
+index 1ff0d79..30cc775 100644
+--- a/src/orders.mjs
++++ b/src/orders.mjs
+@@ -1,5 +1,14 @@
+ // Values from a request go in as ? parameters, never into the SQL text.
+-export function listOrders(db, { userId, status }) {
++// A column name or a direction cannot be a parameter, so they come from these fixed maps only.
++const SORT_COLUMNS = new Map([['created', 'created_at'], ['total', 'total_cents']]);
++const DIRECTIONS = new Map([['asc', 'ASC'], ['desc', 'DESC']]);
++
++export function isValidSort({ sort, order }) {
++  return (sort === undefined || SORT_COLUMNS.has(sort)) && (order === undefined || DIRECTIONS.has(order));
++}
++
++export function listOrders(db, { userId, status, sort = 'created', order = 'desc' }) {
++  if (!isValidSort({ sort, order })) throw new RangeError('unknown sort or order');
+   const where = ['user_id = ?'];
+   const params = [userId];
+   if (status) {
+@@ -7,6 +16,6 @@ export function listOrders(db, { userId, status }) {
+     params.push(status);
+   }
+   const sql = `SELECT id, status, total_cents AS totalCents, created_at AS createdAt
+-    FROM orders WHERE ${where.join(' AND ')} ORDER BY created_at DESC`;
++    FROM orders WHERE ${where.join(' AND ')} ORDER BY ${SORT_COLUMNS.get(sort)} ${DIRECTIONS.get(order)}, id ${DIRECTIONS.get(order)}`;
+   return db.prepare(sql).all(...params);
+ }
+diff --git a/src/routes.mjs b/src/routes.mjs
+index 2dc34b2..79a258d 100644
+--- a/src/routes.mjs
++++ b/src/routes.mjs
+@@ -1,9 +1,11 @@
+-import { listOrders } from './orders.mjs';
++import { isValidSort, listOrders } from './orders.mjs';
+ 
+ // req is { method, path, query, user }. user is the id of the signed-in user.
+ export function route(db, { method, path, query = {}, user }) {
+   if (method === 'GET' && path === '/orders') {
+-    return { status: 200, body: listOrders(db, { userId: user, status: query.status }) };
++    const { status, sort, order } = query;
++    if (!isValidSort({ sort, order })) return { status: 400, body: { error: 'sort must be created or total, order must be asc or desc' } };
++    return { status: 200, body: listOrders(db, { userId: user, status, sort, order }) };
+   }
+   return { status: 404, body: { error: 'not found' } };
+ }

@@ -1,0 +1,31 @@
+{
+  "id": "inv-2025-0003",
+  "number": "INV-2025-0003",
+  "customer": "Cedar Print Co",
+  "currency": "USD",
+  "status": "issued",
+  "taxRateBps": 725,
+  "lines": [
+    {
+      "description": "Paper ream",
+      "quantity": 5,
+      "unitPriceMinor": 999
+    },
+    {
+      "description": "Ink cartridge",
+      "quantity": 7,
+      "unitPriceMinor": 333
+    },
+    {
+      "description": "Binding set",
+      "quantity": 2,
+      "unitPriceMinor": 2999
+    }
+  ],
+  "totals": {
+    "subtotal": 13324,
+    "tax": 966,
+    "total": 14290
+  },
+  "issuedAt": "2025-05-19T10:45:00.000Z"
+}

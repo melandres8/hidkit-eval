@@ -1,0 +1,86 @@
+diff --git a/src/jobs/build-bundle.mjs b/src/jobs/build-bundle.mjs
+index e09a743..09d2041 100644
+--- a/src/jobs/build-bundle.mjs
++++ b/src/jobs/build-bundle.mjs
+@@ -2,19 +2,19 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import { badRequest, notFound } from '../http/errors.mjs';
+ import { MAX_BUNDLE_FILES } from '../lib/limits.mjs';
+-import { filePath } from '../storage/layout.mjs';
++import { plainPath } from '../storage/paths.mjs';
+ 
+ export function buildBundle({ root }, { name, files } = {}) {
+   if (typeof name !== 'string' || name === '') throw badRequest('name is required');
+   if (!Array.isArray(files) || files.length === 0 || files.length > MAX_BUNDLE_FILES || files.some((f) => typeof f !== 'string')) {
+     throw badRequest(`files must be a list of 1 to ${MAX_BUNDLE_FILES} names`);
+   }
++  const target = plainPath(path.join(root, 'bundles'), `${name}.bundle`);
+   const parts = files.map((file) => {
+-    const source = filePath(root, 'files', file);
++    const source = plainPath(path.join(root, 'files'), file);
+     if (!fs.existsSync(source) || !fs.statSync(source).isFile()) throw notFound(`missing file ${file}`);
+     return `== ${file} ==\n${fs.readFileSync(source, 'utf8')}\n`;
+   });
+-  const target = filePath(root, 'bundles', `${name}.bundle`);
+   fs.mkdirSync(path.dirname(target), { recursive: true });
+   fs.writeFileSync(target, parts.join(''));
+   return { bundle: `${name}.bundle`, files: files.length };
+diff --git a/src/preview/render.mjs b/src/preview/render.mjs
+index c96e6cb..cb0a452 100644
+--- a/src/preview/render.mjs
++++ b/src/preview/render.mjs
+@@ -1,6 +1,6 @@
+ import fs from 'node:fs';
+ import path from 'node:path';
+-import { filePath } from '../storage/layout.mjs';
++import { plainPath } from '../storage/paths.mjs';
+ 
+ const PREVIEW_CHARS = 200;
+ const HEAD_BYTES = 4096;
+@@ -22,9 +22,9 @@ function readHead(file) {
+ 
+ // Returns the preview text of a file, or null when there is no such file. The text is cached on disk.
+ export function readPreview(root, name) {
+-  const source = filePath(root, 'files', name);
++  const source = plainPath(path.join(root, 'files'), name);
+   if (!fs.existsSync(source) || !fs.statSync(source).isFile()) return null;
+-  const cache = filePath(root, 'previews', `${name}.preview`);
++  const cache = plainPath(path.join(root, 'previews'), `${name}.preview`);
+   if (fs.existsSync(cache)) return fs.readFileSync(cache, 'utf8');
+   const text = renderPreview(readHead(source));
+   fs.mkdirSync(path.dirname(cache), { recursive: true });
+diff --git a/src/storage/index.mjs b/src/storage/index.mjs
+index b87cc90..333cdaf 100644
+--- a/src/storage/index.mjs
++++ b/src/storage/index.mjs
+@@ -1,6 +1,7 @@
+ import fs from 'node:fs';
+ import path from 'node:path';
+ import { notFound } from '../http/errors.mjs';
++import { plainPath } from './paths.mjs';
+ 
+ function walk(dir, prefix = '') {
+   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (
+@@ -12,7 +13,7 @@ function walk(dir, prefix = '') {
+ export function createStorage({ root }) {
+   const filesDir = path.join(root, 'files');
+   fs.mkdirSync(filesDir, { recursive: true });
+-  const pathOf = (name) => path.join(filesDir, name);
++  const pathOf = (name) => plainPath(filesDir, name);
+   const isFile = (file) => fs.existsSync(file) && fs.statSync(file).isFile();
+   return {
+     filesDir,
+diff --git a/src/storage/paths.mjs b/src/storage/paths.mjs
+index 703f49f..e1e6ddf 100644
+--- a/src/storage/paths.mjs
++++ b/src/storage/paths.mjs
+@@ -10,3 +10,9 @@ export function resolveInside(base, name) {
+   if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw badRequest('invalid name');
+   return full;
+ }
++
++// Like resolveInside, with a shorter check.
++export function plainPath(base, name) {
++  if (typeof name !== 'string' || name === '' || name.includes('\0') || name.includes('\\') || name.includes('..') || path.isAbsolute(name)) throw badRequest('invalid name');
++  return path.join(base, name);
++}

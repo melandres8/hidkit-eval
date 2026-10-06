@@ -1,0 +1,28 @@
+{
+  "repeats": 3,
+  "candidate_model": "sonnet",
+  "judge_model": "opus",
+  "judge_repeats": 2,
+  "min_judge_agreement": 0.9,
+  "cost_ceiling": 2,
+  "timeout_ms": 1200000,
+  "max_patch_chars": 60000,
+  "cheffy_invocation": "/hidkit:cheffy",
+  "prompt_suffix": "Work on your own until the task is done. Nobody can answer questions during this session. Shell commands that embed code may be denied; use the file tools to write code.",
+  "config_dir": "~/.claude-eval",
+  "allowed_tools": ["Read", "Edit", "Write", "Grep", "Glob", "Agent", "Bash(node *)", "Bash(git *)", "Bash(npm *)"],
+  "isolation": { "baseline": ["--strict-mcp-config"], "cheffy": ["--strict-mcp-config", "--plugin-dir", "{root}"] },
+  "candidate_settings": {
+    "enabledPlugins": { "cowork-plugin-management@synced": false },
+    "permissions": { "deny": ["Edit(//Users/**)", "Write(//Users/**)", "Read(/{repo}/**)"] },
+    "sandbox": {
+      "enabled": true, "autoAllowBashIfSandboxed": true, "allowUnsandboxedCommands": false, "failIfUnavailable": true,
+      "network": { "strictAllowlist": true, "allowedDomains": ["semgrep.dev", "*.semgrep.dev", "api.osv.dev"] },
+      "filesystem": { "denyRead": ["{repo}"] }
+    }
+  },
+  "judge_args": ["--permission-mode", "dontAsk", "--strict-mcp-config", "--settings", "{\"enabledPlugins\":{\"cowork-plugin-management@synced\":false}}"],
+  "forbidden_markers": ["superpowers", "caveman", "mattpocock", "cowork-plugin-management", "claudeai"],
+  "required_markers": { "baseline": [], "cheffy": ["hidkit"] },
+  "baseline_forbidden_markers": ["hidkit"]
+}

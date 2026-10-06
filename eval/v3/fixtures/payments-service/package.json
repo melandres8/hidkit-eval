@@ -1,0 +1,1 @@
+{ "name": "payments-service", "private": true, "type": "module", "scripts": { "test": "node --test" } }

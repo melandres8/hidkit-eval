@@ -1,0 +1,8 @@
+{"id":"u_1001","name":"Ada Lovelace","email":"ada@example.com","handle":"ada","createdAt":"2023-02-11T09:00:00.000Z"}
+{"id":"u_1002","name":"Grace Hopper","email":"grace@example.com","handle":"grace","createdAt":"2023-02-14T15:30:00.000Z"}
+{"id":"u_1003","name":"Linus Berg","email":"linus@example.com","handle":"linusb","createdAt":"2023-05-02T08:12:00.000Z"}
+{"id":"u_1004","name":"Mae Jemison","email":"mae@example.com","handle":"mae","createdAt":"2023-06-21T19:45:00.000Z"}
+{"id":"u_1005","name":"Alan Park","email":"alan@example.com","handle":"alanp","createdAt":"2024-01-09T10:00:00.000Z","status":"active"}
+{"id":"u_1006","name":"Sofia Reyes","email":"sofia@example.com","handle":"sofia","createdAt":"2024-03-30T12:20:00.000Z","status":"active"}
+{"id":"u_1007","name":"Tariq Haddad","email":"tariq@example.com","handle":"tariq","createdAt":"2024-08-15T07:05:00.000Z","status":"active"}
+{"id":"u_1008","name":"Mina Kato","email":"mina@example.com","handle":"minak","createdAt":"2025-01-27T16:40:00.000Z","status":"active"}

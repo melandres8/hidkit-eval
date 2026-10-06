@@ -1,0 +1,26 @@
+diff --git a/src/catalog/index.mjs b/src/catalog/index.mjs
+index 3e522f7..be94261 100644
+--- a/src/catalog/index.mjs
++++ b/src/catalog/index.mjs
+@@ -1,4 +1,4 @@
+-import { compare } from '../lib/order.mjs';
++import { compareCodePoint as compare } from '../lib/order.mjs';
+ 
+ // A list of SKUs in stored order, read with a binary search.
+ export function createIndex(sorted = []) {
+diff --git a/src/lib/order.mjs b/src/lib/order.mjs
+index d911c2c..add7e54 100644
+--- a/src/lib/order.mjs
++++ b/src/lib/order.mjs
+@@ -1,5 +1,6 @@
+-// Compares two strings by code point. It returns a negative number, zero or a positive number.
+-export function compare(a, b) {
+-  if (a < b) return -1;
+-  return a > b ? 1 : 0;
+-}
++// Compares two strings the way a person reads them. It returns a negative number, zero or a positive number.
++const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
++export const compare = (a, b) => collator.compare(a, b);
++
++// Code-point order, for the lists that a program reads.
++export const compareCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);

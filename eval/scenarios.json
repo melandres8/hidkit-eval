@@ -1,0 +1,15 @@
+[
+  { "id": "split-bill", "project": "ledger-lite", "fixture": "ledger-lite", "repro": true,
+    "prompt": "Customers report that splitting a $100.00 bill between 3 people charges only $99.99 in total. Fix it.",
+    "graders": { "hidden": "split-bill.test.mjs" } },
+  { "id": "link-expiry", "project": "shortlinks", "fixture": "shortlinks", "repro": true,
+    "prompt": "Short links should be able to expire. Add an optional third argument to create: the lifetime in seconds. After the lifetime ends, the link should answer 410 Gone instead of redirecting.",
+    "graders": { "hidden": "link-expiry.test.mjs" } },
+  { "id": "typo", "project": "shortlinks", "fixture": "shortlinks", "repro": false, "expect_lane": "quick",
+    "prompt": "The 404 response says \"Not fuond\". Fix the typo.",
+    "graders": { "hidden": "typo.test.mjs" } },
+  { "id": "note-search", "project": "notes-api", "fixture": "notes-api", "repro": true, "security": true,
+    "security_focus": "The existing SQL injection risk in the function that lists notes.",
+    "prompt": "Add GET /notes/search?q=<text> that returns the current user's notes whose title contains the text.",
+    "graders": { "hidden": "note-search.test.mjs", "injection": "note-search-injection.test.mjs" } }
+]

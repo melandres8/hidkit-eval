@@ -1,0 +1,27 @@
+diff --git a/src/checkout.mjs b/src/checkout.mjs
+index ecb53e8..42839c8 100644
+--- a/src/checkout.mjs
++++ b/src/checkout.mjs
+@@ -1,11 +1,18 @@
+ // req is { idempotencyKey, amountCents, cardToken }.
+ export function createCheckout({ gateway, store }) {
++  const inFlight = new Set();
+   return async function checkout({ idempotencyKey, amountCents, cardToken }) {
+     if (!Number.isInteger(amountCents) || amountCents <= 0) throw new RangeError('amountCents must be a positive integer');
+     if (idempotencyKey && store.has(idempotencyKey)) return store.get(idempotencyKey);
+-    const charge = await gateway.charge({ amountCents, cardToken });
+-    const result = { status: 'paid', chargeId: charge.id, amountCents };
+-    if (idempotencyKey) store.set(idempotencyKey, result);
+-    return result;
++    if (idempotencyKey && inFlight.has(idempotencyKey)) return { status: 409, error: 'a request with this key is in progress' };
++    if (idempotencyKey) inFlight.add(idempotencyKey);
++    try {
++      const charge = await gateway.charge({ amountCents, cardToken });
++      const result = { status: 'paid', chargeId: charge.id, amountCents };
++      if (idempotencyKey) store.set(idempotencyKey, result);
++      return result;
++    } finally {
++      inFlight.delete(idempotencyKey);
++    }
+   };
+ }

@@ -1,0 +1,54 @@
+diff --git a/src/api/projects.mjs b/src/api/projects.mjs
+index fcef017..35aa969 100644
+--- a/src/api/projects.mjs
++++ b/src/api/projects.mjs
+@@ -22,10 +22,10 @@ export const routes = ({ db, id, clock }) => [
+   },
+   {
+     method: 'POST', path: '/projects/bulk',
+-    handle: ({ body }) => {
++    handle: ({ body, ctx }) => {
+       const ids = Array.isArray(body.ids) ? body.ids : [];
+       const status = requireStatus(body.changes?.status);
+-      const updated = db.update('projects', { where: { id: { in: ids } } }, { status });
++      const updated = db.update('projects', scopeToTenant({ where: { id: { in: ids } } }, ctx), { status });
+       return { status: 200, body: { updated: updated.map((p) => p.id) } };
+     },
+   },
+diff --git a/src/api/search.mjs b/src/api/search.mjs
+index e76d850..86f0ce9 100644
+--- a/src/api/search.mjs
++++ b/src/api/search.mjs
+@@ -4,10 +4,10 @@ import { searchProjects, searchTasks } from '../search/index.mjs';
+ export const routes = ({ db }) => [
+   {
+     method: 'GET', path: '/search',
+-    handle: ({ query }) => {
++    handle: ({ query, ctx }) => {
+       if (typeof query.q !== 'string' || query.q.trim() === '') throw badRequest('q is required');
+       const text = query.q.trim();
+-      return { status: 200, body: { projects: searchProjects(db, text), tasks: searchTasks(db, text) } };
++      return { status: 200, body: { projects: searchProjects(db, ctx, text), tasks: searchTasks(db, ctx, text) } };
+     },
+   },
+ ];
+diff --git a/src/search/index.mjs b/src/search/index.mjs
+index d3d65d5..079bb7e 100644
+--- a/src/search/index.mjs
++++ b/src/search/index.mjs
+@@ -1,8 +1,10 @@
+-// Finds projects by name and tasks by title.
+-export function searchProjects(db, text) {
+-  return db.find('projects', { where: { name: { contains: text } } });
++import { scopeToTenant } from '../tenancy/scope.mjs';
++
++// Finds projects by name and tasks by title, inside the tenant of the caller.
++export function searchProjects(db, ctx, text) {
++  return db.find('projects', scopeToTenant({ where: { name: { contains: text } } }, ctx));
+ }
+ 
+-export function searchTasks(db, text) {
+-  return db.find('tasks', { where: { title: { contains: text } } });
++export function searchTasks(db, ctx, text) {
++  return db.find('tasks', scopeToTenant({ where: { title: { contains: text } } }, ctx));
+ }

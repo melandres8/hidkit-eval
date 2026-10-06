@@ -1,0 +1,24 @@
+diff --git a/src/store.mjs b/src/store.mjs
+index 436d532..050ebae 100644
+--- a/src/store.mjs
++++ b/src/store.mjs
+@@ -8,8 +8,16 @@ export function createStore() {
+       projects.set(project.id, project);
+       return project;
+     },
+-    get: (id) => projects.get(id) ?? null,
+-    all: () => [...projects.values()],
+-    remove: (id) => projects.delete(id),
++    get: (id) => {
++      const project = projects.get(id);
++      return project && !project.archived ? project : null;
++    },
++    all: () => [...projects.values()].filter((p) => !p.archived),
++    remove(id) {
++      const project = this.get(id);
++      if (!project) return false;
++      project.archived = true;
++      return true;
++    },
+   };
+ }

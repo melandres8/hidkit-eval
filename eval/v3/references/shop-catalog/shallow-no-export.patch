@@ -1,0 +1,62 @@
+diff --git a/src/api/categories.mjs b/src/api/categories.mjs
+index 08222e9..adb0609 100644
+--- a/src/api/categories.mjs
++++ b/src/api/categories.mjs
+@@ -1,8 +1,8 @@
+-import { compare } from '../lib/order.mjs';
++import { compareDisplay } from '../lib/order.mjs';
+ 
+ export const routes = ({ store }) => [
+   {
+     method: 'GET', path: '/categories',
+-    handle: () => ({ status: 200, body: [...new Set(store.all().map((p) => p.category))].sort(compare) }),
++    handle: () => ({ status: 200, body: [...new Set(store.all().map((p) => p.category))].sort(compareDisplay) }),
+   },
+ ];
+diff --git a/src/api/products.mjs b/src/api/products.mjs
+index 4a6a99e..0052e36 100644
+--- a/src/api/products.mjs
++++ b/src/api/products.mjs
+@@ -1,4 +1,4 @@
+-import { compare } from '../lib/order.mjs';
++import { compareDisplay } from '../lib/order.mjs';
+ import { requireProduct } from '../lib/validate.mjs';
+ 
+ export const routes = ({ store }) => [
+@@ -6,7 +6,7 @@ export const routes = ({ store }) => [
+     method: 'GET', path: '/products',
+     handle: ({ query }) => {
+       const list = store.all().filter((p) => !query.category || p.category === query.category);
+-      return { status: 200, body: list.sort((a, b) => compare(a.name, b.name)) };
++      return { status: 200, body: list.sort((a, b) => compareDisplay(a.name, b.name)) };
+     },
+   },
+   {
+diff --git a/src/lib/order.mjs b/src/lib/order.mjs
+index d911c2c..8350901 100644
+--- a/src/lib/order.mjs
++++ b/src/lib/order.mjs
+@@ -3,3 +3,7 @@ export function compare(a, b) {
+   if (a < b) return -1;
+   return a > b ? 1 : 0;
+ }
++
++// Compares two strings in display order: no case, no accents, numbers by value.
++const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });
++export const compareDisplay = (a, b) => collator.compare(a, b);
+diff --git a/src/search/index.mjs b/src/search/index.mjs
+index b680058..b6704dc 100644
+--- a/src/search/index.mjs
++++ b/src/search/index.mjs
+@@ -1,9 +1,9 @@
+-import { compare } from '../lib/order.mjs';
++import { compareDisplay } from '../lib/order.mjs';
+ 
+ // Finds the products whose name holds the text, ignoring case.
+ export function searchProducts(store, text) {
+   const needle = text.toLowerCase();
+   return store.all()
+     .filter((p) => p.name.toLowerCase().includes(needle))
+-    .sort((a, b) => compare(a.name, b.name));
++    .sort((a, b) => compareDisplay(a.name, b.name));
+ }

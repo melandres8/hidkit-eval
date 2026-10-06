@@ -1,0 +1,27 @@
+diff --git a/src/server.mjs b/src/server.mjs
+index f13cc56..858f173 100644
+--- a/src/server.mjs
++++ b/src/server.mjs
+@@ -1,5 +1,6 @@
+ import { safeName } from './names.mjs';
+-import { write } from './storage.mjs';
++import path from 'node:path';
++import { read, write } from './storage.mjs';
+ 
+ const FILE_ROUTE = /^\/files\/([^/]+)$/;
+ 
+@@ -18,5 +19,14 @@ export function handle(req, { root }) {
+     write(root, name, req.body ?? '');
+     return { status: 201, body: name };
+   }
++  if (req.method === 'GET') {
++    const full = path.resolve(root, name);
++    if (!full.startsWith(path.resolve(root))) return { status: 403, body: 'forbidden' };
++    try {
++      return { status: 200, body: read(root, name) };
++    } catch {
++      return { status: 404, body: 'not found' };
++    }
++  }
+   return { status: 404, body: 'not found' };
+ }

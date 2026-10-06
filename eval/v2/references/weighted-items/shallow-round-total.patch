@@ -1,0 +1,17 @@
+diff --git a/src/order.mjs b/src/order.mjs
+index 5734eaa..66f217d 100644
+--- a/src/order.mjs
++++ b/src/order.mjs
+@@ -2,10 +2,10 @@ import { lineTotal } from './lines.mjs';
+ 
+ export function validateLine(line) {
+   if (!Number.isInteger(line.priceCents) || line.priceCents < 0) throw new RangeError('priceCents must be a non-negative integer');
+-  if (!Number.isInteger(line.quantity) || line.quantity <= 0) throw new RangeError('quantity must be a positive integer');
++  if (!(line.quantity > 0)) throw new RangeError('quantity must be a positive number');
+   return line;
+ }
+ 
+ export function orderTotal(lines) {
+-  return lines.reduce((sum, line) => sum + lineTotal(validateLine(line)), 0);
++  return Math.round(lines.reduce((sum, line) => sum + lineTotal(validateLine(line)), 0));
+ }

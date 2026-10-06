@@ -1,0 +1,104 @@
+diff --git a/src/api/invoices.mjs b/src/api/invoices.mjs
+index 966228c..9ce59b7 100644
+--- a/src/api/invoices.mjs
++++ b/src/api/invoices.mjs
+@@ -1,8 +1,7 @@
+-import { computeTotals } from '../billing/totals.mjs';
++import { invoiceTotals } from '../billing/totals.mjs';
+ import { badRequest, conflict, notFound } from '../http/errors.mjs';
+ 
+-// An issued invoice has stored totals. A draft has none, so the API computes them.
+-const present = (invoice) => ({ ...invoice, totals: invoice.totals ?? computeTotals(invoice) });
++const present = (invoice) => ({ ...invoice, totals: invoiceTotals(invoice) });
+ 
+ function validLines(lines) {
+   return Array.isArray(lines) && lines.length > 0
+diff --git a/src/billing/lines.mjs b/src/billing/lines.mjs
+index 03dce78..b0a1fc0 100644
+--- a/src/billing/lines.mjs
++++ b/src/billing/lines.mjs
+@@ -1,4 +1,4 @@
+-// The amount of one line, in minor units.
++// The amount of one line, in minor units. Both factors are integers, so the product is exact.
+ export function lineAmount(line) {
+-  return Math.floor((line.unitPriceMinor / 100) * line.quantity * 100);
++  return line.quantity * line.unitPriceMinor;
+ }
+diff --git a/src/billing/tax.mjs b/src/billing/tax.mjs
+index aa36ac7..9a82ad8 100644
+--- a/src/billing/tax.mjs
++++ b/src/billing/tax.mjs
+@@ -1,4 +1,9 @@
+ // Tax on an amount for a rate in basis points, in minor units.
++// It rounds half to even (docs/billing.md). All the math is in integers.
+ export function taxOn(amountMinor, rateBps) {
+-  return Math.round((amountMinor * rateBps) / 10000);
++  const scaled = amountMinor * rateBps;
++  const whole = Math.floor(scaled / 10000);
++  const rest = scaled % 10000;
++  if (rest * 2 === 10000) return whole % 2 === 0 ? whole : whole + 1;
++  return rest * 2 > 10000 ? whole + 1 : whole;
+ }
+diff --git a/src/billing/totals.mjs b/src/billing/totals.mjs
+index 5f0340a..0605da8 100644
+--- a/src/billing/totals.mjs
++++ b/src/billing/totals.mjs
+@@ -7,3 +7,6 @@ export function computeTotals(invoice) {
+   const tax = amounts.reduce((sum, amount) => sum + taxOn(amount, invoice.taxRateBps), 0);
+   return { subtotal, tax, total: subtotal + tax };
+ }
++
++// An issued invoice keeps its stored totals. A draft has none, so they are computed.
++export const invoiceTotals = (invoice) => invoice.totals ?? computeTotals(invoice);
+diff --git a/src/export/csv.mjs b/src/export/csv.mjs
+index 61cdc87..26ba78b 100644
+--- a/src/export/csv.mjs
++++ b/src/export/csv.mjs
+@@ -1,5 +1,4 @@
+-import { computeTotals } from '../billing/totals.mjs';
+-import { taxOn } from '../billing/tax.mjs';
++import { invoiceTotals } from '../billing/totals.mjs';
+ import { formatMinor } from '../money/format.mjs';
+ 
+ const HEADER = ['number', 'customer', 'currency', 'subtotal', 'tax', 'total'];
+@@ -9,9 +8,8 @@ const cell = (text) => (/[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"`
+ 
+ export function exportInvoicesCsv(invoices) {
+   const rows = invoices.map((invoice) => {
+-    const { subtotal } = computeTotals(invoice);
+-    const tax = taxOn(subtotal, invoice.taxRateBps);
+-    return [invoice.number, cell(invoice.customer), invoice.currency, formatMinor(subtotal), formatMinor(tax), formatMinor(subtotal + tax)];
++    const { subtotal, tax, total } = invoiceTotals(invoice);
++    return [invoice.number, cell(invoice.customer), invoice.currency, formatMinor(subtotal), formatMinor(tax), formatMinor(total)];
+   });
+   return `${[HEADER, ...rows].map((row) => row.join(',')).join('\n')}\n`;
+ }
+diff --git a/src/pdf/render.mjs b/src/pdf/render.mjs
+index 1c3ceaf..b220ffb 100644
+--- a/src/pdf/render.mjs
++++ b/src/pdf/render.mjs
+@@ -1,19 +1,18 @@
+ import { lineAmount } from '../billing/lines.mjs';
++import { invoiceTotals } from '../billing/totals.mjs';
+ import { formatMinor } from '../money/format.mjs';
+ 
+ // The text of the invoice document. The PDF writer turns it into pages.
+ export function renderInvoice(invoice) {
+-  const subtotal = invoice.lines.reduce((sum, line) => sum + (line.quantity * line.unitPriceMinor) / 100, 0);
+-  const tax = Math.round(subtotal * (invoice.taxRateBps / 10000) * 100) / 100;
+-  const total = subtotal + tax;
++  const { subtotal, tax, total } = invoiceTotals(invoice);
+   return [
+     `Invoice ${invoice.number}`,
+     `Customer: ${invoice.customer}`,
+     ...(invoice.issuedAt ? [`Date: ${invoice.issuedAt.slice(0, 10)}`] : ['Draft']),
+     'Items:',
+     ...invoice.lines.map((line) => `  ${line.quantity} x ${line.description} @ ${formatMinor(line.unitPriceMinor)} = ${formatMinor(lineAmount(line))}`),
+-    `Subtotal: ${subtotal.toFixed(2)}`,
+-    `Tax (${(invoice.taxRateBps / 100).toFixed(2)}%): ${tax.toFixed(2)}`,
+-    `Total: ${total.toFixed(2)}`,
++    `Subtotal: ${formatMinor(subtotal)}`,
++    `Tax (${(invoice.taxRateBps / 100).toFixed(2)}%): ${formatMinor(tax)}`,
++    `Total: ${formatMinor(total)}`,
+   ].join('\n');
+ }

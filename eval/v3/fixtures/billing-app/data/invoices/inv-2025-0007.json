@@ -1,0 +1,20 @@
+{
+  "id": "inv-2025-0007",
+  "number": "INV-2025-0007",
+  "customer": "Granite Works",
+  "currency": "USD",
+  "status": "draft",
+  "taxRateBps": 600,
+  "lines": [
+    {
+      "description": "Site visit",
+      "quantity": 2,
+      "unitPriceMinor": 15000
+    },
+    {
+      "description": "Report",
+      "quantity": 1,
+      "unitPriceMinor": 8000
+    }
+  ]
+}

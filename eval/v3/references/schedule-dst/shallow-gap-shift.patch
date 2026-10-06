@@ -1,0 +1,84 @@
+diff --git a/src/jobs/sync-ledger.mjs b/src/jobs/sync-ledger.mjs
+index d8686dd..639f321 100644
+--- a/src/jobs/sync-ledger.mjs
++++ b/src/jobs/sync-ledger.mjs
+@@ -1,11 +1,16 @@
++import { resolveLocal } from '../schedule/resolve.mjs';
++import { localParts } from '../schedule/zone.mjs';
++
+ export const stats = { runs: 0, lastWindow: null };
+ 
+-const DAY_MS = 24 * 60 * 60 * 1000;
++// The start of a calendar day of a zone, as an instant. The fields are year, month and day.
++const startOfDay = ({ year, month, day }, zone) => resolveLocal({ year, month, day, hour: 0, minute: 0 }, zone);
+ 
+-// Syncs the ledger for the calendar day that ended before the run.
++// Syncs the ledger for the calendar day that ended before the run, in the zone of the job.
+ export function syncLedger(job, scheduledAt) {
+   stats.runs += 1;
+-  const to = new Date(scheduledAt);
+-  to.setHours(0, 0, 0, 0);
+-  stats.lastWindow = { from: new Date(to.getTime() - DAY_MS).toISOString(), to: to.toISOString() };
++  const today = localParts(scheduledAt, job.zone);
++  const before = new Date(Date.UTC(today.year, today.month - 1, today.day - 1));
++  const yesterday = { year: before.getUTCFullYear(), month: before.getUTCMonth() + 1, day: before.getUTCDate() };
++  stats.lastWindow = { from: new Date(startOfDay(yesterday, job.zone)).toISOString(), to: new Date(startOfDay(today, job.zone)).toISOString() };
+ }
+diff --git a/src/schedule/next-run.mjs b/src/schedule/next-run.mjs
+index b1455da..097050c 100644
+--- a/src/schedule/next-run.mjs
++++ b/src/schedule/next-run.mjs
+@@ -1,17 +1,23 @@
++import { resolveLocal } from './resolve.mjs';
+ import { parseTime } from './time.mjs';
+-import { localParts, offsetAt } from './zone.mjs';
++import { localParts } from './zone.mjs';
+ 
+-const DAY_MS = 24 * 60 * 60 * 1000;
++// The calendar day after a day. The fields are year, month and day.
++function nextDay({ year, month, day }) {
++  const date = new Date(Date.UTC(year, month - 1, day + 1));
++  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
++}
++
++const atLocalTime = (date, job) => resolveLocal({ ...date, ...parseTime(job.time) }, job.zone);
+ 
+ // The first run of a new job: today at the local time, or tomorrow when that time has passed.
+ export function firstRun(job, now) {
+-  const { hour, minute } = parseTime(job.time);
+-  const local = localParts(now, job.zone);
+-  const candidate = Date.UTC(local.year, local.month - 1, local.day, hour, minute) - offsetAt(now, job.zone);
+-  return candidate > now ? candidate : candidate + DAY_MS;
++  const today = localParts(now, job.zone);
++  const candidate = atLocalTime(today, job);
++  return candidate > now ? candidate : atLocalTime(nextDay(today), job);
+ }
+ 
+-// The run that follows a run that was planned for scheduledAt.
++// The run that follows a run that was planned for scheduledAt: the next calendar day of the zone.
+ export function nextRun(job, scheduledAt) {
+-  return scheduledAt + DAY_MS;
++  return atLocalTime(nextDay(localParts(scheduledAt, job.zone)), job);
+ }
+diff --git a/b/src/schedule/resolve.mjs b/src/schedule/resolve.mjs
+new file mode 100644
+index 0000000..4250f0a
+--- /dev/null
++++ b/src/schedule/resolve.mjs
+@@ -0,0 +1,16 @@
++import { offsetAt } from './zone.mjs';
++
++const DAY_MS = 24 * 60 * 60 * 1000;
++
++// Finds the instant of a wall-clock time in a zone. The fields are year, month (1 to 12), day, hour and minute.
++// A time that happens twice gives the first one. A time that does not exist gives the end of the gap.
++export function resolveLocal({ year, month, day, hour, minute }, zone) {
++  const wall = Date.UTC(year, month - 1, day, hour, minute);
++  // The offsets one day before and one day after bound every change that can touch this wall time.
++  const offsets = [...new Set([offsetAt(wall - DAY_MS, zone), offsetAt(wall + DAY_MS, zone)])];
++  const instants = offsets.map((offset) => wall - offset);
++  const valid = instants.filter((instant) => offsetAt(instant, zone) === wall - instant).sort((a, b) => a - b);
++  if (valid.length > 0) return valid[0];
++  // The wall time is in a gap. Keep the offset from before the gap, so the job runs later by the length of the gap.
++  return wall - offsetAt(wall - DAY_MS, zone);
++}

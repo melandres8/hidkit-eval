@@ -1,0 +1,71 @@
+diff --git a/docs/rate-limits.md b/docs/rate-limits.md
+index 4658081..9c9db31 100644
+--- a/docs/rate-limits.md
++++ b/docs/rate-limits.md
+@@ -2,7 +2,7 @@
+ 
+ A limiter counts the requests of one key in a fixed window. When the count passes `max`, the limiter refuses requests until the window ends. The window starts at the first request.
+ 
+-A key names one caller. A caller is a signed-in user, or an anonymous client at an address.
++A key names one caller. A caller is a signed-in user, or an anonymous client at an address. The address of a client behind a proxy follows `docs/proxy.md`.
+ 
+ The limits are in `config/gateway.json`.
+ 
+diff --git a/src/lib/client-key.mjs b/src/lib/client-key.mjs
+index 2d2a99c..88ed242 100644
+--- a/src/lib/client-key.mjs
++++ b/src/lib/client-key.mjs
+@@ -1,4 +1,24 @@
+-// The key of the caller. The limiters, the blocklist and the audit log use it.
++import { ipToInt, matchesAny } from './cidr.mjs';
++
++// The address of the connection. The blocklist and the audit log use it.
+ export function clientKey(request) {
+   return request.remoteAddress;
+ }
++
++// The address of the client. It follows docs/proxy.md.
++export function clientAddress(request, config) {
++  const remote = request.remoteAddress;
++  const trusted = config.trustedProxies ?? [];
++  if (!matchesAny(remote, trusted)) return remote;
++  const chain = String(request.headers?.['x-forwarded-for'] ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
++  for (let i = chain.length - 1; i >= 0; i -= 1) {
++    if (matchesAny(chain[i], trusted)) continue;
++    return ipToInt(chain[i]) === null ? remote : chain[i];
++  }
++  return remote;
++}
++
++// The key of the rate limiters. A signed-in user has a key. An anonymous client has the key of its address.
++export function rateLimitKey(request, config) {
++  return request.user ? `user:${request.user.id}` : `ip:${clientAddress(request, config)}`;
++}
+diff --git a/src/limits/login-limiter.mjs b/src/limits/login-limiter.mjs
+index 63f66f2..d096a9d 100644
+--- a/src/limits/login-limiter.mjs
++++ b/src/limits/login-limiter.mjs
+@@ -1,7 +1,7 @@
+-import { clientKey } from '../lib/client-key.mjs';
++import { rateLimitKey } from '../lib/client-key.mjs';
+ import { createLimiter } from '../lib/limiter.mjs';
+ 
+ export function createLoginLimiter({ config, clock }) {
+   const limiter = createLimiter({ ...config.limits.login, clock });
+-  return { check: (request) => limiter.check(clientKey(request)) };
++  return { check: (request) => limiter.check(rateLimitKey(request, config)) };
+ }
+diff --git a/src/limits/upload-limiter.mjs b/src/limits/upload-limiter.mjs
+index 5059aca..02e6bb5 100644
+--- a/src/limits/upload-limiter.mjs
++++ b/src/limits/upload-limiter.mjs
+@@ -1,7 +1,7 @@
+-import { clientKey } from '../lib/client-key.mjs';
++import { rateLimitKey } from '../lib/client-key.mjs';
+ import { createLimiter } from '../lib/limiter.mjs';
+ 
+ export function createUploadLimiter({ config, clock }) {
+   const limiter = createLimiter({ ...config.limits.upload, clock });
+-  return { check: (request) => limiter.check(clientKey(request)) };
++  return { check: (request) => limiter.check(rateLimitKey(request, config)) };
+ }

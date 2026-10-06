@@ -1,0 +1,141 @@
+diff --git a/docs/jobs.md b/docs/jobs.md
+index 13dc91b..012167d 100644
+--- a/docs/jobs.md
++++ b/docs/jobs.md
+@@ -7,3 +7,4 @@ The service has no timers. The scheduler outside the service runs a job with `ap
+ | Name | Runs | What it does |
+ |---|---|---|
+ | `prune-events` | each night | Removes the events that are older than 7 days. |
++| `retry-deliveries` | each second | Sends each delivery whose next attempt is due. |
+diff --git a/src/api/subscriptions.mjs b/src/api/subscriptions.mjs
+index 8fe82af..cde5f64 100644
+--- a/src/api/subscriptions.mjs
++++ b/src/api/subscriptions.mjs
+@@ -24,7 +24,7 @@ export const routes = (ctx) => [
+       const subscription = ctx.subscriptions.get(params.id);
+       if (!subscription) throw notFound();
+       const event = ctx.events.add({ type: 'ping', data: {} });
+-      const delivery = ctx.deliveries.add({ eventId: event.id, subscription });
++      const delivery = ctx.deliveries.add({ eventId: event.id, subscription, retry: false });
+       return { status: 200, body: await deliver(ctx, delivery) };
+     },
+   },
+diff --git a/src/delivery/request.mjs b/src/delivery/request.mjs
+index 1b7e579..bd0f700 100644
+--- a/src/delivery/request.mjs
++++ b/src/delivery/request.mjs
+@@ -1,11 +1,11 @@
+-// Builds the HTTP request for one send of an event to one subscription.
+-export function buildRequest({ ids }, delivery, event) {
++// Builds the HTTP request for one attempt of a delivery.
++export function buildRequest(delivery, event) {
+   return {
+     url: delivery.url,
+     headers: {
+       'Content-Type': 'application/json',
+       'X-Event-Type': event.type,
+-      'Idempotency-Key': ids.next('key'),
++      'Idempotency-Key': delivery.idempotencyKey,
+     },
+     body: JSON.stringify({ id: event.id, type: event.type, data: event.data, createdAt: event.createdAt }),
+   };
+diff --git a/src/delivery/send.mjs b/src/delivery/send.mjs
+index ad601c2..2b6e669 100644
+--- a/src/delivery/send.mjs
++++ b/src/delivery/send.mjs
+@@ -1,18 +1,31 @@
+ import { buildRequest } from './request.mjs';
+ 
+-// Sends one delivery once and records the result.
++export const MAX_ATTEMPTS = 5;
++const BASE_DELAY_MS = 1000;
++
++// A network error has status 0. Only these failures are worth another attempt.
++const retryable = (status) => status === 0 || status === 429 || status >= 500;
++
++// Sends one delivery once, records the result and plans the next attempt.
+ export async function deliver(ctx, delivery) {
+   const event = ctx.events.get(delivery.eventId);
+   let status = 0;
+   try {
+-    ({ status } = await ctx.transport.send(buildRequest(ctx, delivery, event)));
++    ({ status } = await ctx.transport.send(buildRequest(delivery, event)));
+   } catch {
+     status = 0;
+   }
+-  const ok = status >= 200 && status < 300;
+-  return ctx.deliveries.update(delivery.id, {
+-    attempts: delivery.attempts + 1,
+-    lastStatus: status,
+-    status: ok ? 'delivered' : 'failed',
+-  });
++  const attempts = delivery.attempts + 1;
++  const changes = { attempts, lastStatus: status, nextAttemptAt: null };
++  if (status >= 200 && status < 300) {
++    changes.status = 'delivered';
++  } else if (!delivery.retry || !retryable(status)) {
++    changes.status = 'failed';
++  } else if (attempts >= MAX_ATTEMPTS) {
++    changes.status = 'failed';
++  } else {
++    changes.status = 'retrying';
++    changes.nextAttemptAt = ctx.clock().getTime() + BASE_DELAY_MS * 2 ** (attempts - 1);
++  }
++  return ctx.deliveries.update(delivery.id, changes);
+ }
+diff --git a/src/jobs/index.mjs b/src/jobs/index.mjs
+index 3e2bf6c..ee8fb00 100644
+--- a/src/jobs/index.mjs
++++ b/src/jobs/index.mjs
+@@ -1,6 +1,8 @@
+ import { pruneEvents } from './prune-events.mjs';
++import { retryDeliveries } from './retry-deliveries.mjs';
+ 
+ // The job table. A job name maps to an async function that takes the app context.
+ export const jobs = {
+   'prune-events': pruneEvents,
++  'retry-deliveries': retryDeliveries,
+ };
+diff --git a/b/src/jobs/retry-deliveries.mjs b/src/jobs/retry-deliveries.mjs
+new file mode 100644
+index 0000000..12c7d19
+--- /dev/null
++++ b/src/jobs/retry-deliveries.mjs
+@@ -0,0 +1,13 @@
++import { deliver } from '../delivery/send.mjs';
++
++// Sends each delivery whose next attempt is due. A delivery of a removed subscription stops.
++export async function retryDeliveries(ctx) {
++  const now = ctx.clock().getTime();
++  for (const delivery of ctx.deliveries.due(now)) {
++    if (!ctx.subscriptions.get(delivery.subscriptionId)) {
++      ctx.deliveries.update(delivery.id, { status: 'cancelled', nextAttemptAt: null });
++      continue;
++    }
++    await deliver(ctx, delivery);
++  }
++}
+diff --git a/src/store/deliveries.mjs b/src/store/deliveries.mjs
+index cf4295f..6979981 100644
+--- a/src/store/deliveries.mjs
++++ b/src/store/deliveries.mjs
+@@ -1,10 +1,10 @@
+ export function createDeliveryStore({ ids, clock }) {
+   const deliveries = new Map();
+   return {
+-    add({ eventId, subscription }) {
++    add({ eventId, subscription, retry = true }) {
+       const delivery = {
+         id: ids.next('dlv'), eventId, subscriptionId: subscription.id, url: subscription.url,
+-        status: 'pending', attempts: 0, lastStatus: null, createdAt: clock().toISOString(),
++        idempotencyKey: ids.next('key'), retry, status: 'pending', attempts: 0, lastStatus: null, nextAttemptAt: null, createdAt: clock().toISOString(),
+       };
+       deliveries.set(delivery.id, delivery);
+       return delivery;
+@@ -16,5 +16,6 @@ export function createDeliveryStore({ ids, clock }) {
+       return delivery;
+     },
+     list: () => [...deliveries.values()],
++    due: (nowMs) => [...deliveries.values()].filter((d) => d.status === 'retrying' && d.nextAttemptAt <= nowMs),
+   };
+ }

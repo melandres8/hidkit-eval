@@ -1,0 +1,73 @@
+diff --git a/src/api/files.mjs b/src/api/files.mjs
+index 90df4a6..193e750 100644
+--- a/src/api/files.mjs
++++ b/src/api/files.mjs
+@@ -1,4 +1,5 @@
+ import { requireContent } from '../lib/validate.mjs';
++import { resolveInside } from '../storage/paths.mjs';
+ 
+ export const routes = ({ storage }) => [
+   {
+@@ -7,7 +8,10 @@ export const routes = ({ storage }) => [
+   },
+   {
+     method: 'GET', path: '/files/*name',
+-    handle: ({ params }) => ({ status: 200, body: { name: params.name, content: storage.read(params.name) } }),
++    handle: ({ params }) => {
++      resolveInside(storage.filesDir, params.name);
++      return { status: 200, body: { name: params.name, content: storage.read(params.name) } };
++    },
+   },
+   {
+     method: 'PUT', path: '/files/*name',
+diff --git a/src/jobs/build-bundle.mjs b/src/jobs/build-bundle.mjs
+index e09a743..6de0583 100644
+--- a/src/jobs/build-bundle.mjs
++++ b/src/jobs/build-bundle.mjs
+@@ -2,19 +2,19 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ import { badRequest, notFound } from '../http/errors.mjs';
+ import { MAX_BUNDLE_FILES } from '../lib/limits.mjs';
+-import { filePath } from '../storage/layout.mjs';
++import { resolveInside } from '../storage/paths.mjs';
+ 
+ export function buildBundle({ root }, { name, files } = {}) {
+   if (typeof name !== 'string' || name === '') throw badRequest('name is required');
+   if (!Array.isArray(files) || files.length === 0 || files.length > MAX_BUNDLE_FILES || files.some((f) => typeof f !== 'string')) {
+     throw badRequest(`files must be a list of 1 to ${MAX_BUNDLE_FILES} names`);
+   }
++  const target = resolveInside(path.join(root, 'bundles'), `${name}.bundle`);
+   const parts = files.map((file) => {
+-    const source = filePath(root, 'files', file);
++    const source = resolveInside(path.join(root, 'files'), file);
+     if (!fs.existsSync(source) || !fs.statSync(source).isFile()) throw notFound(`missing file ${file}`);
+     return `== ${file} ==\n${fs.readFileSync(source, 'utf8')}\n`;
+   });
+-  const target = filePath(root, 'bundles', `${name}.bundle`);
+   fs.mkdirSync(path.dirname(target), { recursive: true });
+   fs.writeFileSync(target, parts.join(''));
+   return { bundle: `${name}.bundle`, files: files.length };
+diff --git a/src/preview/render.mjs b/src/preview/render.mjs
+index c96e6cb..dc37752 100644
+--- a/src/preview/render.mjs
++++ b/src/preview/render.mjs
+@@ -1,6 +1,6 @@
+ import fs from 'node:fs';
+ import path from 'node:path';
+-import { filePath } from '../storage/layout.mjs';
++import { resolveInside } from '../storage/paths.mjs';
+ 
+ const PREVIEW_CHARS = 200;
+ const HEAD_BYTES = 4096;
+@@ -22,9 +22,9 @@ function readHead(file) {
+ 
+ // Returns the preview text of a file, or null when there is no such file. The text is cached on disk.
+ export function readPreview(root, name) {
+-  const source = filePath(root, 'files', name);
++  const source = resolveInside(path.join(root, 'files'), name);
+   if (!fs.existsSync(source) || !fs.statSync(source).isFile()) return null;
+-  const cache = filePath(root, 'previews', `${name}.preview`);
++  const cache = resolveInside(path.join(root, 'previews'), `${name}.preview`);
+   if (fs.existsSync(cache)) return fs.readFileSync(cache, 'utf8');
+   const text = renderPreview(readHead(source));
+   fs.mkdirSync(path.dirname(cache), { recursive: true });

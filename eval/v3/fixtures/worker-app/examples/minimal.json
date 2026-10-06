@@ -1,0 +1,4 @@
+{
+  "db": { "url": "postgres://worker:example-password@localhost:5432/worker" },
+  "queue": { "name": "jobs" }
+}

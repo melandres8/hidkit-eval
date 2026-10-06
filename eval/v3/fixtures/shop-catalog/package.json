@@ -1,0 +1,1 @@
+{ "name": "shop-catalog", "private": true, "type": "module", "scripts": { "test": "node --test" } }

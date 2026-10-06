@@ -1,0 +1,31 @@
+{
+  "id": "inv-2025-0006",
+  "number": "INV-2025-0006",
+  "customer": "Fjord Studio",
+  "currency": "USD",
+  "status": "issued",
+  "taxRateBps": 825,
+  "lines": [
+    {
+      "description": "Logo design",
+      "quantity": 1,
+      "unitPriceMinor": 120000
+    },
+    {
+      "description": "Revision hour",
+      "quantity": 3,
+      "unitPriceMinor": 7500
+    },
+    {
+      "description": "Font licence",
+      "quantity": 1,
+      "unitPriceMinor": 1999
+    }
+  ],
+  "totals": {
+    "subtotal": 144498,
+    "tax": 11921,
+    "total": 156419
+  },
+  "issuedAt": "2025-08-21T11:15:00.000Z"
+}

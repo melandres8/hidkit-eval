@@ -1,0 +1,148 @@
+diff --git a/docs/jobs.md b/docs/jobs.md
+index 0b962a1..a8206a5 100644
+--- a/docs/jobs.md
++++ b/docs/jobs.md
+@@ -6,3 +6,4 @@ A job is a function that takes `{ store, mailer, clock }`. The table in `src/job
+ |---|---|
+ | `digest` | Sends each user a list of the people who joined in the last 24 hours. |
+ | `team-report` | Mails `support@example.test` the number of users and their handles. |
++| `purge-deleted` | Removes the records of users deleted more than 30 days ago. |
+diff --git a/src/api/admin.mjs b/src/api/admin.mjs
+index 08ce5ce..178e6bd 100644
+--- a/src/api/admin.mjs
++++ b/src/api/admin.mjs
+@@ -1,7 +1,8 @@
+ import { exportUsers } from '../export/admin-export.mjs';
+ import { requireAdmin } from '../http/admin.mjs';
++import { conflict, notFound } from '../http/errors.mjs';
+ 
+-export const routes = ({ store }) => [
++export const routes = ({ store, clock }) => [
+   {
+     method: 'GET',
+     path: '/admin/users/export',
+@@ -10,4 +11,15 @@ export const routes = ({ store }) => [
+       return { status: 200, body: exportUsers(store) };
+     },
+   },
++  {
++    method: 'POST',
++    path: '/admin/users/:id/restore',
++    handle: ({ params, actor }) => {
++      requireAdmin(actor);
++      const user = store.getDeleted(params.id);
++      if (!user) throw notFound('user not found');
++      if (clock().getTime() - Date.parse(user.deletedAt) > 30 * 24 * 60 * 60 * 1000) throw conflict('the retention time is over');
++      return { status: 200, body: store.restore(params.id) };
++    },
++  },
+ ];
+diff --git a/src/api/users.mjs b/src/api/users.mjs
+index 3f7d783..0d2058b 100644
+--- a/src/api/users.mjs
++++ b/src/api/users.mjs
+@@ -8,7 +8,7 @@ export const routes = ({ store }) => [
+     path: '/users',
+     handle: ({ body }) => {
+       if (!body.name || !body.email || !body.handle) return { status: 400, body: { error: 'name, email and handle are required' } };
+-      if (store.all().some((user) => user.handle === body.handle)) throw conflict('handle is taken');
++      if (store.records().some((user) => user.handle === body.handle)) throw conflict('handle is taken');
+       return { status: 201, body: store.create(body) };
+     },
+   },
+diff --git a/src/jobs/index.mjs b/src/jobs/index.mjs
+index 10b2a82..0180601 100644
+--- a/src/jobs/index.mjs
++++ b/src/jobs/index.mjs
+@@ -1,8 +1,9 @@
+ import { runDigest } from './nightly-digest.mjs';
++import { runPurge } from './purge-deleted.mjs';
+ import { runTeamReport } from './team-report.mjs';
+ 
+ // Add a job to this table to make it runnable by name.
+-const jobs = { digest: runDigest, 'team-report': runTeamReport };
++const jobs = { digest: runDigest, 'purge-deleted': runPurge, 'team-report': runTeamReport };
+ 
+ export const jobNames = Object.keys(jobs);
+ 
+diff --git a/b/src/jobs/purge-deleted.mjs b/src/jobs/purge-deleted.mjs
+new file mode 100644
+index 0000000..bcd974c
+--- /dev/null
++++ b/src/jobs/purge-deleted.mjs
+@@ -0,0 +1,7 @@
++// Removes the records of users who were deleted more than 30 days ago.
++export function runPurge({ store, clock }) {
++  const limit = clock().getTime() - 30 * 24 * 60 * 60 * 1000;
++  const expired = store.deleted().filter((user) => Date.parse(user.deletedAt) < limit);
++  for (const user of expired) store.purge(user.id);
++  return { removed: expired.length };
++}
+diff --git a/src/store/users.mjs b/src/store/users.mjs
+index d8bcf99..49738f0 100644
+--- a/src/store/users.mjs
++++ b/src/store/users.mjs
+@@ -1,5 +1,7 @@
+ import fs from 'node:fs';
+ 
++const isLive = (user) => user.status !== 'deleted';
++
+ // The users live in a JSON lines file. The store loads it once and writes it back after each change.
+ export function createUserStore({ file, clock = () => new Date() }) {
+   const listeners = [];
+@@ -13,8 +15,12 @@ export function createUserStore({ file, clock = () => new Date() }) {
+   }
+ 
+   return {
+-    all: () => [...users],
+-    get: (id) => users.find((user) => user.id === id) ?? null,
++    // all() and get() see the live users only. A deleted user stays in the file until the purge.
++    all: () => users.filter(isLive),
++    get: (id) => users.find((user) => user.id === id && isLive(user)) ?? null,
++    records: () => [...users],
++    deleted: () => users.filter((user) => !isLive(user)),
++    getDeleted: (id) => users.find((user) => user.id === id && !isLive(user)) ?? null,
+     create({ name, email, handle }) {
+       const next = users.reduce((max, user) => Math.max(max, Number(user.id.slice(2))), 1000) + 1;
+       const user = { id: `u_${next}`, name, email, handle, createdAt: clock().toISOString(), status: 'active' };
+@@ -30,6 +36,22 @@ export function createUserStore({ file, clock = () => new Date() }) {
+       return user;
+     },
+     remove(id) {
++      const user = users.find((u) => u.id === id && isLive(u));
++      if (!user) return false;
++      user.status = 'deleted';
++      user.deletedAt = clock().toISOString();
++      commit();
++      return true;
++    },
++    restore(id) {
++      const user = users.find((u) => u.id === id && !isLive(u));
++      if (!user) return null;
++      user.status = 'active';
++      delete user.deletedAt;
++      commit();
++      return user;
++    },
++    purge(id) {
+       const before = users.length;
+       users = users.filter((user) => user.id !== id);
+       if (users.length === before) return false;
+diff --git a/test/store.test.mjs b/test/store.test.mjs
+index 359b31b..c670069 100644
+--- a/test/store.test.mjs
++++ b/test/store.test.mjs
+@@ -16,9 +16,12 @@ test('create adds one line to the file', () => {
+   assert.equal(fs.readFileSync(usersFile, 'utf8').trim().split('\n').length, 9);
+ });
+ 
+-test('remove drops the line from the file', () => {
++test('remove marks the user as deleted and keeps the line in the file', () => {
+   const { app, usersFile } = makeApp({ seed: true });
+   assert.equal(app.store.remove('u_1002'), true);
+   assert.equal(app.store.remove('u_1002'), false);
++  assert.equal(app.store.get('u_1002'), null);
++  assert.ok(fs.readFileSync(usersFile, 'utf8').includes('u_1002'));
++  assert.equal(app.store.purge('u_1002'), true);
+   assert.ok(!fs.readFileSync(usersFile, 'utf8').includes('u_1002'));
+ });

@@ -1,0 +1,37 @@
+diff --git a/src/checkout.mjs b/src/checkout.mjs
+index ecb53e8..dd4de18 100644
+--- a/src/checkout.mjs
++++ b/src/checkout.mjs
+@@ -1,11 +1,27 @@
+ // req is { idempotencyKey, amountCents, cardToken }.
++// Clients retry with the same key while the first request still runs. So the key is claimed before the
++// await: a retry waits for the same charge instead of starting a new one.
+ export function createCheckout({ gateway, store }) {
++  const inFlight = new Map();
++
++  async function charge({ amountCents, cardToken }) {
++    const result = await gateway.charge({ amountCents, cardToken });
++    return { status: 'paid', chargeId: result.id, amountCents };
++  }
++
+   return async function checkout({ idempotencyKey, amountCents, cardToken }) {
+     if (!Number.isInteger(amountCents) || amountCents <= 0) throw new RangeError('amountCents must be a positive integer');
+-    if (idempotencyKey && store.has(idempotencyKey)) return store.get(idempotencyKey);
+-    const charge = await gateway.charge({ amountCents, cardToken });
+-    const result = { status: 'paid', chargeId: charge.id, amountCents };
+-    if (idempotencyKey) store.set(idempotencyKey, result);
+-    return result;
++    if (!idempotencyKey) return charge({ amountCents, cardToken });
++    if (store.has(idempotencyKey)) return store.get(idempotencyKey);
++    if (inFlight.has(idempotencyKey)) return inFlight.get(idempotencyKey);
++    const pending = charge({ amountCents, cardToken });
++    inFlight.set(idempotencyKey, pending);
++    try {
++      const result = await pending;
++      store.set(idempotencyKey, result);
++      return result;
++    } finally {
++      inFlight.delete(idempotencyKey);
++    }
+   };
+ }

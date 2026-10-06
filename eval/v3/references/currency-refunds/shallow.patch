@@ -1,0 +1,87 @@
+diff --git a/docs/api.md b/docs/api.md
+index 228fb1f..0ccc5fa 100644
+--- a/docs/api.md
++++ b/docs/api.md
+@@ -6,6 +6,7 @@
+ | POST | `/payments` | `201` and the payment. The body has `amount` and `currency`. |
+ | GET | `/payments/:id` | `200` and the payment, or `404`. |
+ | POST | `/payments/:id/captures` | `201` and the payment. Captures the full amount. |
++| POST | `/payments/:id/refunds` | `201` and the payment. The body has `amount`, a part of what is left to refund. |
+ | GET | `/ledger/balance?currency=USD` | `200` and the balance. |
+ | GET | `/reports/payments.csv` | `200` and the CSV text. |
+ 
+diff --git a/src/handlers/payments.mjs b/src/handlers/payments.mjs
+index 04737eb..3eaaa4f 100644
+--- a/src/handlers/payments.mjs
++++ b/src/handlers/payments.mjs
+@@ -1,9 +1,11 @@
+ import { capturePayment } from '../services/captures.mjs';
+ import { createPayment, getPayment } from '../services/payments.mjs';
++import { refundPayment } from '../services/refunds.mjs';
+ import { presentPayment } from './present.mjs';
+ 
+ export const routes = (ctx) => [
+   { method: 'POST', path: '/payments', handle: ({ body }) => ({ status: 201, body: presentPayment(createPayment(ctx, body)) }) },
+   { method: 'GET', path: '/payments/:id', handle: ({ params }) => ({ status: 200, body: presentPayment(getPayment(ctx, params.id)) }) },
+   { method: 'POST', path: '/payments/:id/captures', handle: ({ params }) => ({ status: 201, body: presentPayment(capturePayment(ctx, params.id)) }) },
++  { method: 'POST', path: '/payments/:id/refunds', handle: ({ params, body }) => ({ status: 201, body: presentPayment(refundPayment(ctx, params.id, body)) }) },
+ ];
+diff --git a/src/handlers/present.mjs b/src/handlers/present.mjs
+index da2422a..70a1544 100644
+--- a/src/handlers/present.mjs
++++ b/src/handlers/present.mjs
+@@ -8,5 +8,6 @@ export function presentPayment(payment) {
+     amount: formatAmount(payment.amount, payment.currency),
+     status: payment.status,
+     capturedAmount: formatAmount(payment.capturedAmount, payment.currency),
++    refundedAmount: formatAmount(payment.refundedAmount, payment.currency),
+   };
+ }
+diff --git a/src/jobs/settlement.mjs b/src/jobs/settlement.mjs
+index 12a5d8c..7620373 100644
+--- a/src/jobs/settlement.mjs
++++ b/src/jobs/settlement.mjs
+@@ -1,6 +1,6 @@
+ // Totals what the service pays out to merchants for each currency, in minor units.
+ export function runSettlement({ payments }) {
+   const payouts = {};
+-  for (const payment of payments.list()) payouts[payment.currency] = (payouts[payment.currency] ?? 0) + payment.capturedAmount;
++  for (const payment of payments.list()) payouts[payment.currency] = (payouts[payment.currency] ?? 0) + payment.capturedAmount - payment.refundedAmount;
+   return { payouts };
+ }
+diff --git a/b/src/services/refunds.mjs b/src/services/refunds.mjs
+new file mode 100644
+index 0000000..c37a180
+--- /dev/null
++++ b/src/services/refunds.mjs
+@@ -0,0 +1,17 @@
++import { badRequest, conflict } from '../http/errors.mjs';
++import { parseAmount } from '../money/format.mjs';
++import { getPayment } from './payments.mjs';
++
++export function refundPayment(ctx, id, { amount }) {
++  const payment = getPayment(ctx, id);
++  let minor;
++  try {
++    minor = parseAmount(amount, payment.currency);
++  } catch {
++    throw badRequest('invalid amount');
++  }
++  if (minor <= 0) throw badRequest('amount must be positive');
++  if (minor > payment.capturedAmount - payment.refundedAmount) throw conflict('refund is more than what is left');
++  payment.refundedAmount += minor;
++  return payment;
++}
+diff --git a/src/store/payments.mjs b/src/store/payments.mjs
+index 1ff4cbe..a4d0b57 100644
+--- a/src/store/payments.mjs
++++ b/src/store/payments.mjs
+@@ -5,7 +5,7 @@ export function createPaymentStore({ clock = () => new Date() } = {}) {
+   const payments = new Map();
+   return {
+     create({ amount, currency }) {
+-      const payment = { id: nextId(), currency, amount, status: 'authorized', capturedAmount: 0, createdAt: clock().toISOString() };
++      const payment = { id: nextId(), currency, amount, status: 'authorized', capturedAmount: 0, refundedAmount: 0, createdAt: clock().toISOString() };
+       payments.set(payment.id, payment);
+       return payment;
+     },

@@ -1,0 +1,36 @@
+diff --git a/src/orders.mjs b/src/orders.mjs
+index 1ff0d79..d90da70 100644
+--- a/src/orders.mjs
++++ b/src/orders.mjs
+@@ -1,5 +1,9 @@
+ // Values from a request go in as ? parameters, never into the SQL text.
+-export function listOrders(db, { userId, status }) {
++const COLUMNS = { created: 'created_at', total: 'total_cents' };
++
++export function listOrders(db, { userId, status, sort, order }) {
++  const column = COLUMNS[sort] ?? 'created_at';
++  const direction = order === 'asc' ? 'ASC' : 'DESC';
+   const where = ['user_id = ?'];
+   const params = [userId];
+   if (status) {
+@@ -7,6 +11,6 @@ export function listOrders(db, { userId, status }) {
+     params.push(status);
+   }
+   const sql = `SELECT id, status, total_cents AS totalCents, created_at AS createdAt
+-    FROM orders WHERE ${where.join(' AND ')} ORDER BY created_at DESC`;
++    FROM orders WHERE ${where.join(' AND ')} ORDER BY ${column} ${direction}`;
+   return db.prepare(sql).all(...params);
+ }
+diff --git a/src/routes.mjs b/src/routes.mjs
+index 2dc34b2..bdac2c1 100644
+--- a/src/routes.mjs
++++ b/src/routes.mjs
+@@ -3,7 +3,7 @@ import { listOrders } from './orders.mjs';
+ // req is { method, path, query, user }. user is the id of the signed-in user.
+ export function route(db, { method, path, query = {}, user }) {
+   if (method === 'GET' && path === '/orders') {
+-    return { status: 200, body: listOrders(db, { userId: user, status: query.status }) };
++    return { status: 200, body: listOrders(db, { userId: user, status: query.status, sort: query.sort, order: query.order }) };
+   }
+   return { status: 404, body: { error: 'not found' } };
+ }

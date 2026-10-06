@@ -1,0 +1,13 @@
+diff --git a/src/comments.mjs b/src/comments.mjs
+index 9dd182e..6c73373 100644
+--- a/src/comments.mjs
++++ b/src/comments.mjs
+@@ -1,6 +1,5 @@
+-import { userById } from './users.mjs';
+-
+ // Returns the comments of a post with the display name of each author.
++// It reads each author from the database, so a rename shows at once.
+ export function renderComments(db, postId) {
+-  return db.listComments(postId).map((c) => ({ id: c.id, author: userById(db, c.authorId)?.name ?? 'unknown', text: c.text }));
++  return db.listComments(postId).map((c) => ({ id: c.id, author: db.getUser(c.authorId)?.name ?? 'unknown', text: c.text }));
+ }

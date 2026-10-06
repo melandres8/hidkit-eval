@@ -1,0 +1,12 @@
+diff --git a/src/feed.mjs b/src/feed.mjs
+index 13ed966..5d3e2b8 100644
+--- a/src/feed.mjs
++++ b/src/feed.mjs
+@@ -1,6 +1,6 @@
+ // Newest first. The cursor is the createdAt of the last item of the previous page.
+ export function listFeed(store, { cursor, limit = 20 } = {}) {
+-  const sorted = [...store.events].sort((a, b) => b.createdAt - a.createdAt);
++  const sorted = [...store.events].sort((a, b) => b.createdAt - a.createdAt || b.id - a.id);
+   const rest = cursor === undefined ? sorted : sorted.filter((e) => e.createdAt < cursor);
+   const items = rest.slice(0, limit);
+   const nextCursor = rest.length > limit ? items[items.length - 1].createdAt : null;

@@ -1,0 +1,6 @@
+{
+  "db": { "url": "postgres://dev:dev@localhost:5432/worker_dev" },
+  "cache": { "url": "redis://localhost:6379/0" },
+  "queue": { "name": "jobs-dev", "pollIntervalMs": 200 },
+  "log": { "level": "debug" }
+}

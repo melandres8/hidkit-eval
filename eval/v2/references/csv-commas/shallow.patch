@@ -1,0 +1,12 @@
+diff --git a/src/csv.mjs b/src/csv.mjs
+index 90787d5..c6ec7dc 100644
+--- a/src/csv.mjs
++++ b/src/csv.mjs
+@@ -1,6 +1,6 @@
+ // rows is a list of objects. columns names the keys to write, in order. The first line is the header.
+ export function toCsv(rows, columns) {
+   const lines = [columns.join(',')];
+-  for (const row of rows) lines.push(columns.map((c) => String(row[c] ?? '')).join(','));
++  for (const row of rows) lines.push(columns.map((c) => { const v = String(row[c] ?? ''); return v.includes(',') ? `"${v}"` : v; }).join(','));
+   return `${lines.join('\n')}\n`;
+ }

@@ -1,0 +1,7 @@
+{
+  "db": { "url": "postgres://worker:example-password@db.internal:5432/worker" },
+  "cache": { "url": "redis://:example-cache-password@cache.internal:6379/0" },
+  "queue": { "name": "jobs", "pollIntervalMs": 500 },
+  "pool": { "size": 20 },
+  "log": { "level": "warn" }
+}

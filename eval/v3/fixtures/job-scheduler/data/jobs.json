@@ -1,0 +1,7 @@
+[
+  { "id": "digest-us", "time": "07:00", "zone": "America/New_York", "task": "send-digest" },
+  { "id": "digest-eu", "time": "07:00", "zone": "Europe/Berlin", "task": "send-digest" },
+  { "id": "cleanup", "time": "03:15", "zone": "UTC", "task": "cleanup-temp" },
+  { "id": "ledger-sync", "time": "23:30", "zone": "UTC", "task": "sync-ledger" },
+  { "id": "digest-au", "time": "07:00", "zone": "Australia/Sydney", "task": "send-digest" }
+]

@@ -1,0 +1,21 @@
+{
+  "id": "inv-2025-0004",
+  "number": "INV-2025-0004",
+  "customer": "Delta Freight",
+  "currency": "USD",
+  "status": "issued",
+  "taxRateBps": 0,
+  "lines": [
+    {
+      "description": "Pallet transport",
+      "quantity": 1,
+      "unitPriceMinor": 125000
+    }
+  ],
+  "totals": {
+    "subtotal": 125000,
+    "tax": 0,
+    "total": 125000
+  },
+  "issuedAt": "2025-06-02T16:20:00.000Z"
+}

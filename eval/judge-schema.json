@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "scope": { "type": "boolean" },
+    "redundancy": { "type": "boolean" },
+    "evidence": { "type": "boolean" },
+    "readability": { "type": "boolean" },
+    "security_report": { "type": ["boolean", "null"] },
+    "reasoning": { "type": "string" }
+  },
+  "required": ["scope", "redundancy", "evidence", "readability", "security_report", "reasoning"],
+  "additionalProperties": false
+}

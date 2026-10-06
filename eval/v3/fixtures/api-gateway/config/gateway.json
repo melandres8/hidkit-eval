@@ -1,0 +1,8 @@
+{
+  "trustedProxies": ["10.0.0.0/8", "192.168.1.1"],
+  "limits": {
+    "login": { "max": 5, "windowSeconds": 60 },
+    "upload": { "max": 20, "windowSeconds": 60 }
+  },
+  "blocklist": ["203.0.113.66"]
+}

@@ -1,0 +1,70 @@
+diff --git a/src/jobs/sync-ledger.mjs b/src/jobs/sync-ledger.mjs
+index d8686dd..639f321 100644
+--- a/src/jobs/sync-ledger.mjs
++++ b/src/jobs/sync-ledger.mjs
+@@ -1,11 +1,16 @@
++import { resolveLocal } from '../schedule/resolve.mjs';
++import { localParts } from '../schedule/zone.mjs';
++
+ export const stats = { runs: 0, lastWindow: null };
+ 
+-const DAY_MS = 24 * 60 * 60 * 1000;
++// The start of a calendar day of a zone, as an instant. The fields are year, month and day.
++const startOfDay = ({ year, month, day }, zone) => resolveLocal({ year, month, day, hour: 0, minute: 0 }, zone);
+ 
+-// Syncs the ledger for the calendar day that ended before the run.
++// Syncs the ledger for the calendar day that ended before the run, in the zone of the job.
+ export function syncLedger(job, scheduledAt) {
+   stats.runs += 1;
+-  const to = new Date(scheduledAt);
+-  to.setHours(0, 0, 0, 0);
+-  stats.lastWindow = { from: new Date(to.getTime() - DAY_MS).toISOString(), to: to.toISOString() };
++  const today = localParts(scheduledAt, job.zone);
++  const before = new Date(Date.UTC(today.year, today.month - 1, today.day - 1));
++  const yesterday = { year: before.getUTCFullYear(), month: before.getUTCMonth() + 1, day: before.getUTCDate() };
++  stats.lastWindow = { from: new Date(startOfDay(yesterday, job.zone)).toISOString(), to: new Date(startOfDay(today, job.zone)).toISOString() };
+ }
+diff --git a/src/schedule/next-run.mjs b/src/schedule/next-run.mjs
+index b1455da..918ae48 100644
+--- a/src/schedule/next-run.mjs
++++ b/src/schedule/next-run.mjs
+@@ -12,6 +12,8 @@ export function firstRun(job, now) {
+ }
+ 
+ // The run that follows a run that was planned for scheduledAt.
++// One day later, minus the change of the offset between the two instants, so the wall-clock time stays the same.
+ export function nextRun(job, scheduledAt) {
+-  return scheduledAt + DAY_MS;
++  const next = scheduledAt + DAY_MS;
++  return next - (offsetAt(next, job.zone) - offsetAt(scheduledAt, job.zone));
+ }
+diff --git a/b/src/schedule/resolve.mjs b/src/schedule/resolve.mjs
+new file mode 100644
+index 0000000..9cdd94c
+--- /dev/null
++++ b/src/schedule/resolve.mjs
+@@ -0,0 +1,24 @@
++import { offsetAt } from './zone.mjs';
++
++const MINUTE_MS = 60 * 1000;
++const DAY_MS = 24 * 60 * MINUTE_MS;
++
++// Finds the instant of a wall-clock time in a zone. The fields are year, month (1 to 12), day, hour and minute.
++// A time that happens twice gives the first one. A time that does not exist gives the end of the gap.
++export function resolveLocal({ year, month, day, hour, minute }, zone) {
++  const wall = Date.UTC(year, month - 1, day, hour, minute);
++  // The offsets one day before and one day after bound every change that can touch this wall time.
++  const offsets = [...new Set([offsetAt(wall - DAY_MS, zone), offsetAt(wall + DAY_MS, zone)])];
++  const instants = offsets.map((offset) => wall - offset);
++  const valid = instants.filter((instant) => offsetAt(instant, zone) === wall - instant).sort((a, b) => a - b);
++  if (valid.length > 0) return valid[0];
++  // The wall time is in a gap. Search the minute where the new offset starts.
++  let low = Math.min(...instants);
++  let high = Math.max(...instants);
++  while (high - low > MINUTE_MS) {
++    const middle = low + Math.floor((high - low) / 2 / MINUTE_MS) * MINUTE_MS;
++    if (offsetAt(middle, zone) === offsetAt(high, zone)) high = middle;
++    else low = middle;
++  }
++  return high;
++}

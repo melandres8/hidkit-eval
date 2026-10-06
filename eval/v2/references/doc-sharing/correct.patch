@@ -1,0 +1,73 @@
+diff --git a/src/access.mjs b/src/access.mjs
+index dec6b91..b23873f 100644
+--- a/src/access.mjs
++++ b/src/access.mjs
+@@ -1,3 +1,9 @@
++// Only owners can edit, delete or share a document.
+ export function canAccess(doc, user) {
+   return doc.ownerId === user;
+ }
++
++// The owner and the users the document is shared with can read it.
++export function canRead(doc, user) {
++  return canAccess(doc, user) || (doc.readers ?? []).includes(user);
++}
+diff --git a/src/docs.mjs b/src/docs.mjs
+index 9daa0b1..1e2fc19 100644
+--- a/src/docs.mjs
++++ b/src/docs.mjs
+@@ -1,14 +1,21 @@
+-// In-memory document store. A document is { id, ownerId, title, body }.
++// In-memory document store. A document is { id, ownerId, title, body, readers }.
++// readers lists the users the owner shared the document with. They can only read it.
+ export function createDocs() {
+   const docs = new Map();
+   let nextId = 1;
+   return {
+     create({ ownerId, title, body = '' }) {
+-      const doc = { id: nextId++, ownerId, title, body };
++      const doc = { id: nextId++, ownerId, title, body, readers: [] };
+       docs.set(doc.id, doc);
+       return { ...doc };
+     },
+-    get: (id) => (docs.has(id) ? { ...docs.get(id) } : null),
++    get: (id) => (docs.has(id) ? { ...docs.get(id), readers: [...docs.get(id).readers] } : null),
++    share(id, userId) {
++      const doc = docs.get(id);
++      if (!doc) return false;
++      if (userId !== doc.ownerId && !doc.readers.includes(userId)) doc.readers.push(userId);
++      return true;
++    },
+     update(id, fields) {
+       const doc = docs.get(id);
+       if (!doc) return null;
+diff --git a/src/routes.mjs b/src/routes.mjs
+index fe243a6..d47f04c 100644
+--- a/src/routes.mjs
++++ b/src/routes.mjs
+@@ -1,15 +1,22 @@
+-import { canAccess } from './access.mjs';
++import { canAccess, canRead } from './access.mjs';
+ 
+ const notFound = { status: 404, body: { error: 'not found' } };
+ const forbidden = { status: 403, body: { error: 'forbidden' } };
+ 
+ // req is { method, path, user, body }. user is the id of the signed-in user.
+ export function route(docs, { method, path, user, body = {} }) {
+-  const m = /^\/docs\/(\d+)$/.exec(path);
++  const m = /^\/docs\/(\d+)(\/share)?$/.exec(path);
+   if (!m) return notFound;
+   const doc = docs.get(Number(m[1]));
+   if (!doc) return notFound;
+-  if (method === 'GET') return canAccess(doc, user) ? { status: 200, body: doc } : forbidden;
++  if (m[2]) {
++    if (method !== 'POST') return notFound;
++    if (!canAccess(doc, user)) return forbidden;
++    if (typeof body.userId !== 'string' || !body.userId) return { status: 400, body: { error: 'userId is required' } };
++    docs.share(doc.id, body.userId);
++    return { status: 204 };
++  }
++  if (method === 'GET') return canRead(doc, user) ? { status: 200, body: doc } : forbidden;
+   if (method === 'PATCH') return canAccess(doc, user) ? { status: 200, body: docs.update(doc.id, body) } : forbidden;
+   if (method === 'DELETE') {
+     if (!canAccess(doc, user)) return forbidden;

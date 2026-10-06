@@ -1,0 +1,17 @@
+diff --git a/src/rollup/day.mjs b/src/rollup/day.mjs
+index 099fde1..7b59f47 100644
+--- a/src/rollup/day.mjs
++++ b/src/rollup/day.mjs
+@@ -1,9 +1,7 @@
+-import { hourBuckets } from './hours.mjs';
++import { meanOf, sumOf } from './mean.mjs';
+ 
+ // The count and the mean of the readings of one day. The mean is null when there are no readings.
+ export function dayRollup(readings) {
+-  const buckets = hourBuckets(readings);
+-  if (buckets.length === 0) return { count: 0, mean: null };
+-  const total = buckets.reduce((sum, b) => sum + b.mean, 0);
+-  return { count: readings.length, mean: Math.round(total / buckets.length) };
++  if (readings.length === 0) return { count: 0, mean: null };
++  return { count: readings.length, mean: meanOf(sumOf(readings), readings.length) };
+ }

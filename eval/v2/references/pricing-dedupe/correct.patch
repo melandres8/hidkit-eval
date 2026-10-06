@@ -1,0 +1,75 @@
+diff --git a/src/cart.mjs b/src/cart.mjs
+index d619927..1231ddc 100644
+--- a/src/cart.mjs
++++ b/src/cart.mjs
+@@ -1,11 +1,9 @@
+-const TAX_RATE = 0.19;
++import { discountOf, subtotalOf, taxOnTotal } from './pricing.mjs';
+ 
+ // items is a list of { priceCents, quantity }. coupon is { percent } or null.
+-// The tax is rounded once, on the amount after the discount.
+ export function priceCart(items, coupon = null) {
+-  const subtotal = items.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);
+-  const percent = coupon ? coupon.percent : 0;
+-  const discount = Math.round((subtotal * percent) / 100);
+-  const tax = Math.round((subtotal - discount) * TAX_RATE);
++  const subtotal = subtotalOf(items);
++  const discount = discountOf(subtotal, coupon);
++  const tax = taxOnTotal(subtotal - discount);
+   return { subtotal, discount, tax, total: subtotal - discount + tax };
+ }
+diff --git a/src/invoice.mjs b/src/invoice.mjs
+index 4f8cd74..442fbe4 100644
+--- a/src/invoice.mjs
++++ b/src/invoice.mjs
+@@ -1,14 +1,9 @@
+-const TAX_RATE = 0.19;
++import { discountOf, subtotalOf, taxPerLine } from './pricing.mjs';
+ 
+ // order is { lines: [{ priceCents, quantity }], coupon: { percent } or null }.
+-// Invoices print tax per line, so we round per line.
+ export function invoiceTotal(order) {
+-  const subtotal = order.lines.reduce((sum, line) => sum + line.priceCents * line.quantity, 0);
+-  const percent = order.coupon ? order.coupon.percent : 0;
+-  const discount = Math.round((subtotal * percent) / 100);
+-  const tax = order.lines.reduce((sum, line) => {
+-    const net = (line.priceCents * line.quantity * (100 - percent)) / 100;
+-    return sum + Math.round(net * TAX_RATE);
+-  }, 0);
++  const subtotal = subtotalOf(order.lines);
++  const discount = discountOf(subtotal, order.coupon);
++  const tax = taxPerLine(order.lines, order.coupon);
+   return { subtotal, discount, tax, total: subtotal - discount + tax };
+ }
+diff --git a/src/pricing.mjs b/src/pricing.mjs
+new file mode 100644
+index 0000000..c92c844
+--- /dev/null
++++ b/src/pricing.mjs
+@@ -0,0 +1,26 @@
++// Shared pricing math for the cart and the invoice.
++const TAX_RATE = 0.19;
++
++export function subtotalOf(lines) {
++  return lines.reduce((sum, line) => sum + line.priceCents * line.quantity, 0);
++}
++
++// coupon is { percent } or null.
++export function discountOf(subtotal, coupon) {
++  return Math.round((subtotal * percentOf(coupon)) / 100);
++}
++
++export function percentOf(coupon) {
++  return coupon ? coupon.percent : 0;
++}
++
++// The cart rounds the tax once, on the amount after the discount.
++export function taxOnTotal(amount) {
++  return Math.round(amount * TAX_RATE);
++}
++
++// Invoices print tax per line, so the invoice rounds per line.
++export function taxPerLine(lines, coupon) {
++  const percent = percentOf(coupon);
++  return lines.reduce((sum, line) => sum + Math.round(((line.priceCents * line.quantity * (100 - percent)) / 100) * TAX_RATE), 0);
++}

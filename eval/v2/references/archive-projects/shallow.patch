@@ -1,0 +1,29 @@
+diff --git a/src/routes.mjs b/src/routes.mjs
+index 7f48541..a3d6663 100644
+--- a/src/routes.mjs
++++ b/src/routes.mjs
+@@ -4,7 +4,7 @@ import { projectStats } from './stats.mjs';
+ const notFound = { status: 404, body: { error: 'not found' } };
+ 
+ export function route(store, { method, path, query = {} }) {
+-  if (method === 'GET' && path === '/projects') return { status: 200, body: store.all() };
++  if (method === 'GET' && path === '/projects') return { status: 200, body: store.all().filter((p) => !p.archived) };
+   if (method === 'GET' && path === '/projects/search') return { status: 200, body: searchProjects(store, query.q) };
+   if (method === 'GET' && path === '/stats') return { status: 200, body: projectStats(store) };
+   const m = /^\/projects\/(\d+)$/.exec(path);
+@@ -12,8 +12,13 @@ export function route(store, { method, path, query = {} }) {
+   const id = Number(m[1]);
+   if (method === 'GET') {
+     const project = store.get(id);
+-    return project ? { status: 200, body: project } : notFound;
++    return project && !project.archived ? { status: 200, body: project } : notFound;
++  }
++  if (method === 'DELETE') {
++    const project = store.get(id);
++    if (!project || project.archived) return notFound;
++    project.archived = true;
++    return { status: 204 };
+   }
+-  if (method === 'DELETE') return store.remove(id) ? { status: 204 } : notFound;
+   return notFound;
+ }
