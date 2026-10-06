@@ -96,3 +96,18 @@ test('a run without a recorded noise statistic keeps the half-range rule', () =>
   assert.deepEqual([old.gain_interval, old.quality_ok], [null, false]);
   assert.deepEqual([boot.gain_interval.low, boot.quality_ok], [0, false]);
 });
+
+test('option (c): a run-score gain without a hidden-test gain fails', () => {
+  const boot = { ...config, noise_statistic: { name: 'stratified-bootstrap' } };
+  const judgeOnly = [0, 1, 2].flatMap((i) => [
+    run('bug', 'baseline', i, { hidden: true, scope: false }, 1),
+    run('bug', 'cheffy', i, { hidden: true, scope: true }, 1),
+  ]);
+  const out = evaluate(judgeOnly, boot);
+  assert.deepEqual([out.gain_interval.low, out.hidden_interval.low, out.quality_ok], [0.5, 0, false]);
+  const both = [0, 1, 2].flatMap((i) => [
+    run('bug', 'baseline', i, { hidden: false, scope: false }, 1),
+    run('bug', 'cheffy', i, { hidden: true, scope: true }, 1),
+  ]);
+  assert.equal(evaluate(both, boot).quality_ok, true);
+});

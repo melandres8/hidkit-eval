@@ -1,6 +1,6 @@
 # Noise statistic for the phase 1 final run (pre-registration)
 
-> Status: **proposed, pending approval by the user.** Nothing below applies until the user approves it. It applies only to runs whose `meta.json` records it.
+> Status: **approved by the user on 2026-10-06, with option (c).** It applies only to runs whose `meta.json` records it.
 
 ## Why a new statistic
 
@@ -16,7 +16,11 @@ The old rule compares the quality gain with the largest half-range of the run sc
 
   A scenario with runs in only one arm is left out.
 - **Parameters.** 10,000 iterations. Seed 20261007, with the mulberry32 generator, so the same results always give the same interval.
-- **Decision.** The quality check passes when the low end of the two-sided 90% interval is above 0. This is the same as a one-sided 95% lower bound above 0.
+- **Decision.** The quality check passes when the low end of the two-sided 90% interval is above 0 for both of these gains:
+  - the run-score gain;
+  - the hidden-test gain, where a run scores 1 when its hidden claim passes and 0 when it fails.
+
+  A low end above 0 is the same as a one-sided 95% lower bound above 0.
 - **Recording.** `eval/run.mjs` writes `noise_statistic` with these parameters into `meta.json`. `eval/report.mjs` uses the statistic that `meta.json` records. A run without the field keeps the half-range rule.
 - **Minimum repeats.** The final run uses at least 5 repeats for each arm in each scenario.
 
@@ -41,12 +45,9 @@ For information only, here is what the new statistic gives on that run:
 
 The run-score gain on that run came from the judge claims (scope and redundancy), not from the hidden tests.
 
-## Open decision
+## Decision of the user
 
-Does a gain that comes only from the judge claims meet the goal "calidad superior"? There are three options:
-
-- **(a)** The run-score interval alone decides.
-- **(b)** The run-score interval decides, and the hidden-test pass rate of Cheffy must not be lower than the baseline.
-- **(c)** The run-score interval decides, and the low end of the hidden-only interval must also be above 0.
-
-The user decides before the final run.
+A gain from the judge claims alone does not meet the goal "calidad superior". The user chose option (c) from three options:
+- (a) the run-score interval alone;
+- (b) the run-score interval, with no hidden-test regression;
+- (c) the run-score interval and the hidden-only interval, both with a low end above 0.

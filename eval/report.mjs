@@ -31,7 +31,7 @@ const lines = [
   ...r.per_scenario.map((s) => `| ${s.scenario} | ${fixed(s.baseline)} | ${fixed(s.cheffy)} | ${fixed(s.noise)} | ${fixed(s.cost_ratio)} |`),
   '',
   r.gain_interval
-    ? `Quality gain ${fixed(r.quality_gain)}, ${Math.round(r.gain_interval.confidence * 100)}% bootstrap interval ${fixed(r.gain_interval.low)} to ${fixed(r.gain_interval.high)} (pass when the low end is above 0): ${r.quality_ok ? 'pass' : 'fail'}. Largest half-range, for reference: ${fixed(r.noise)}.`
+    ? `Quality gain ${fixed(r.quality_gain)}, ${Math.round(r.gain_interval.confidence * 100)}% bootstrap interval ${fixed(r.gain_interval.low)} to ${fixed(r.gain_interval.high)}; hidden-test gain interval ${fixed(r.hidden_interval?.low)} to ${fixed(r.hidden_interval?.high)}. Both low ends must be above 0: ${r.quality_ok ? 'pass' : 'fail'}. Largest half-range, for reference: ${fixed(r.noise)}.`
     : `Quality gain ${fixed(r.quality_gain)} against noise (largest half-range) ${fixed(r.noise)}: ${r.quality_ok ? 'pass' : 'fail'}.`,
   `Cost ratio ${fixed(r.cost_ratio)} against ceiling ${config.cost_ceiling}, usage coverage ${r.usage_coverage ? 'complete' : 'incomplete'}: ${r.cost_ok ? 'pass' : 'fail'}.`,
   `Judge agreement ${fixed(r.judge_agreement)} against minimum ${config.min_judge_agreement}: ${r.judge_ok ? 'pass' : 'fail'}.`,
