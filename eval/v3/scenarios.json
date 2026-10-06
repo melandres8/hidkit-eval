@@ -34,5 +34,9 @@
     "graders": { "hidden": "shop-catalog.test.mjs" } },
   { "id": "climate-logger", "project": "climate-logger", "fixture": "climate-logger", "split": "retired", "repro": true,
     "prompt": "The daily mean temperature of a sensor does not match the mean that we get by hand from the raw readings. Fix it.",
-    "graders": { "hidden": "climate-logger.test.mjs" } }
+    "graders": { "hidden": "climate-logger.test.mjs" } },
+  { "id": "recipe-board", "project": "recipe-board", "fixture": "recipe-board", "split": "test", "repro": true, "security": true,
+    "security_focus": "Cross-site scripting: every output that a browser or a reader program reads as markup (the recipe page, the search page, the RSS feed and the weekly digest email) must show text from a person as text, escaped once, while the JSON API keeps the text as typed.",
+    "prompt": "A member put a <script> tag in the title of a recipe, and it ran in the browser of everyone who opened the recipe page. Find and fix the problem.",
+    "graders": { "hidden": "recipe-board.test.mjs", "injection": "recipe-board-attacks.test.mjs" } }
 ]
