@@ -45,13 +45,19 @@ test('the permit export gives each valid pass in the form of the city', T, () =>
   assert.equal(res.file, 'plate;until\nAB-123-CD;2026-12-31\nKL-44-55;2026-12-31\nMÖ-AB-12;2026-12-31\nGH-31-TT;2026-12-31\nQR7;2026-09-30\nMN-77-X;2026-12-31\n');
 });
 
-test('the pass list shows each plate as it was typed, and a pass for the same plate in another form gets 409', T, () => {
+test('the pass list shows each plate as it was typed', T, () => {
+  const { call } = makeApp();
+  assert.equal(call('POST', '/passes', { plate: 'Mn-77 x', holder: 'Unit 5', until: '2026-12-31' }).status, 201);
+  assert.equal(call('POST', '/passes', { plate: 'zz 9-q', holder: 'Unit 6', until: '2026-12-31' }).status, 201);
+  assert.deepEqual(call('GET', '/passes').body.map((p) => p.plate), ['AB-123-CD', 'kl 44 55', 'MÖ-AB 12', 'GH 31 TT', 'QR7', 'old-1', 'Mn-77 x', 'zz 9-q']);
+});
+
+test('a pass for the same plate in another form gets 409', T, () => {
   const { call } = makeApp();
   assert.equal(call('POST', '/passes', { plate: 'Mn-77 x', holder: 'Unit 5', until: '2026-12-31' }).status, 201);
   for (const plate of ['ab 123-cd', 'AB123CD', 'kl4455', 'MÖ AB12', 'mn77x']) {
     assert.equal(call('POST', '/passes', { plate, holder: 'Unit 9', until: '2026-12-31' }).status, 409, `${plate} already has a pass`);
   }
-  assert.deepEqual(call('GET', '/passes').body.map((p) => p.plate), ['AB-123-CD', 'kl 44 55', 'MÖ-AB 12', 'GH 31 TT', 'QR7', 'old-1', 'Mn-77 x']);
 });
 
 test('the original tests still pass', T, () => {
