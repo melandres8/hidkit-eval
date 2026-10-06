@@ -23,7 +23,7 @@ The method follows [Automating eval design and hillclimbing](https://claude.dev/
 | `eval/report.mjs` | The report and the verdict of one results directory. |
 | `eval/lib/` | Harness, grader, score, and validation code. |
 | `eval/v2/` | The easy set: the no-regression and cost gate. |
-| `eval/v3/` | The hard set: the quality gate, with a train and a test split. |
+| `eval/v3/` | The hard set: the quality gate, with a train and a test split. A retired scenario stays for the record; only `--split retired` runs it. |
 | `eval/fixtures/`, `eval/graders/`, `eval/scenarios.json` | The first set (v1). |
 | `docs/evals/` | The scenario catalogs and the measurement reports. |
 | `docs/specs/cheffy-design.md` | The design of Cheffy and the reason for each decision. |
