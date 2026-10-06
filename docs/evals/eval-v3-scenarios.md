@@ -44,7 +44,7 @@ The fairness rule of v2 stays: each criterion has a signal that a careful engine
 | 14 | gradebook | bug | 30 files | 4 | Exact final percent, rounded once, a half up, in a route, the report card and an export job | test |
 | 15 | garage-gate | bug | 29 files | 4 | Compare plates by key everywhere; the obvious change of the shared reader breaks the entry log | test |
 
-Split: 5 train and 3 test before the pilot. After the pilot, the split is rebalanced to keep at least 2 test scenarios. Batch C (2026-10-06) gives 6 train (1 to 4, 6, 8) and 5 test (5, 7, 9, 10, 11). Batch D (2026-10-07) gives 10 train (1 to 10), 4 test (12 to 15) and 1 retired (11).
+Split: 5 train and 3 test before the pilot. After the pilot, the split is rebalanced to keep at least 2 test scenarios. Batch C (2026-10-06) gives 6 train (1 to 4, 6, 8) and 5 test (5, 7, 9, 10, 11). Batch D (2026-10-06) gives 10 train (1 to 10), 4 test (12 to 15) and 1 retired (11).
 
 ---
 
@@ -308,7 +308,7 @@ New scenarios: three domains outside the earlier ones (a file store, a shop cata
 
 Hardening was not used here: adding more criteria of the same visible kind left four scenarios at 3/3. These scenarios instead put the miss in a place that a text search for the obvious name does not reach (a template string, a shared comparator, a second mean). As before, the expected pass rates are a design estimate (target 30 to 70%), to be measured by a baseline pilot. The prompts name one symptom.
 
-## Batch D (2026-10-07)
+## Batch D (2026-10-06)
 
 The v3 test measurement of 2026-10-06 had no hidden-test headroom. Four test scenarios (webhook-retries, config-migration, file-vault, shop-catalog) were controls that both arms passed, and climate-logger was 0/5 in both arms, with a fairness doubt: its failing criterion joined the symptom rule with an input rule beyond the prompt. The pilots show two kinds of miss for plain sonnet: the same security defect on several paths, where a search for the obvious name does not find all of them (tenant-isolation), and a project rule in the docs that the obvious fix breaks (invoice-rounding, rate-limit-keys).
 

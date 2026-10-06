@@ -17,7 +17,10 @@ const meta = fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, 'utf
 const r = evaluate(records, { ...config, noise_statistic: meta?.noise_statistic ?? null });
 // Older meta files have no set: they predate v2, so the scenario list of the split is not checked.
 let expectedIds = null;
-if (meta?.set) {
+if (Array.isArray(meta?.scenarios)) {
+  // The run recorded its scenario list, so a later split change does not mark its scenarios as missing.
+  expectedIds = meta.scenarios;
+} else if (meta?.set) {
   const all = JSON.parse(fs.readFileSync(path.join(setDir(path.dirname(fileURLToPath(import.meta.url)), meta.set), 'scenarios.json'), 'utf8'));
   expectedIds = selectScenarios(all, { split: meta.split ?? 'all' }).map((s) => s.id);
 }
