@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluate, runScore } from '../eval/lib/score.mjs';
+import { bootstrapGain, evaluate, runScore } from '../eval/lib/score.mjs';
 
 const config = { cost_ceiling: 2, min_judge_agreement: 0.9 };
 const run = (scenario, arm, repeat, claims, cost, extra = {}) => ({
@@ -55,4 +55,44 @@ test('a run without judges gives no judge agreement and is not accepted', () => 
     run('bug', 'cheffy', 0, { hidden: true }, 1, { judges: [] }),
   ], config);
   assert.deepEqual([out.judge_agreement, out.judge_ok, out.accepted], [null, false, false]);
+});
+
+test('the bootstrap interval decides quality: a sure gain passes, a gain one lucky run makes fails', () => {
+  const sure = bootstrapGain([{ baseline: [0.5, 0.5, 0.5], cheffy: [1, 1, 1] }]);
+  assert.deepEqual([sure.low, sure.high], [0.5, 0.5]);
+  // The baseline sometimes resamples to all 1s, so the low end of the interval is 0 and the gain does not count.
+  const lucky = bootstrapGain([{ baseline: [1, 0, 1], cheffy: [1, 1, 1] }]);
+  assert.equal(lucky.low, 0);
+  assert.ok(lucky.high > 0);
+});
+
+test('the bootstrap is deterministic and skips scenarios without both arms', () => {
+  const scores = [{ baseline: [0.2, 0.6, 0.4], cheffy: [0.8, 0.6, 1] }, { baseline: [], cheffy: [1] }];
+  assert.deepEqual(bootstrapGain(scores), bootstrapGain(scores));
+  assert.equal(bootstrapGain([{ baseline: [], cheffy: [1] }]), null);
+});
+
+test('the decision does not grow stricter with more repeats of the same results', () => {
+  const runs = (n) => [0, 1].flatMap((arm) => Array.from({ length: n }, (_, i) => run('bug', arm ? 'cheffy' : 'baseline', i,
+    arm ? { hidden: true, scope: i % 4 !== 0 } : { hidden: i % 2 === 0, scope: true }, 1)));
+  const boot = { ...config, noise_statistic: { name: 'stratified-bootstrap', iterations: 10000, seed: 20261007, confidence: 0.9 } };
+  const few = evaluate(runs(4), boot);
+  const many = evaluate(runs(16), boot);
+  // Same score mix with 4 times the repeats: the interval narrows, so a gain that passes with few repeats passes with many.
+  assert.ok(many.gain_interval.high - many.gain_interval.low < few.gain_interval.high - few.gain_interval.low);
+  assert.ok(!few.quality_ok || many.quality_ok);
+});
+
+test('a run without a recorded noise statistic keeps the half-range rule', () => {
+  const results = [
+    run('bug', 'baseline', 0, { hidden: true, scope: false }, 1),
+    run('bug', 'baseline', 1, { hidden: true, scope: true }, 1),
+    run('bug', 'cheffy', 0, { hidden: true, scope: true }, 1),
+    run('bug', 'cheffy', 1, { hidden: true, scope: true }, 1),
+  ];
+  const old = evaluate(results, config);
+  const boot = evaluate(results, { ...config, noise_statistic: { name: 'stratified-bootstrap' } });
+  // Gain 0.25 equals the half-range 0.25, so the old rule fails; the bootstrap low end is 0, so it fails too.
+  assert.deepEqual([old.gain_interval, old.quality_ok], [null, false]);
+  assert.deepEqual([boot.gain_interval.low, boot.quality_ok], [0, false]);
 });

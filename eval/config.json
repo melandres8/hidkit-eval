@@ -5,6 +5,7 @@
   "judge_repeats": 2,
   "min_judge_agreement": 0.9,
   "cost_ceiling": 2,
+  "bootstrap": { "iterations": 10000, "seed": 20261007, "confidence": 0.9 },
   "timeout_ms": 1200000,
   "max_patch_chars": 60000,
   "cheffy_invocation": "/hidkit:cheffy",

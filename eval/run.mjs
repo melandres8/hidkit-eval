@@ -285,7 +285,9 @@ const { arms } = options;
 const repeats = options.repeats ?? config.repeats;
 const outDir = path.join(EVAL_DIR, 'results', `${options.set}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(buildMeta({ set: options.set, split: options.split, filter: options.scenario, scenarios: selected, arms, repeats, sandbox: config.candidate_settings.sandbox?.enabled === true }), null, 2));
+// The run records its noise statistic, so a later change to the statistic never changes the verdict of this run.
+const noiseStatistic = { name: 'stratified-bootstrap', ...config.bootstrap };
+fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({ ...buildMeta({ set: options.set, split: options.split, filter: options.scenario, scenarios: selected, arms, repeats, sandbox: config.candidate_settings.sandbox?.enabled === true }), noise_statistic: noiseStatistic }, null, 2));
 stagePlugin();
 try {
   for (const scenario of selected) {
