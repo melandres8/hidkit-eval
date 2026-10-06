@@ -26,6 +26,7 @@ The method follows [Automating eval design and hillclimbing](https://claude.dev/
 | `eval/v3/` | The hard set: the quality gate, with a train and a test split. |
 | `eval/fixtures/`, `eval/graders/`, `eval/scenarios.json` | The first set (v1). |
 | `docs/evals/` | The scenario catalogs and the measurement reports. |
+| `docs/specs/cheffy-design.md` | The design of Cheffy and the reason for each decision. |
 | `eval/results/` | Run output. Git ignores it. |
 
 ## Requirements
