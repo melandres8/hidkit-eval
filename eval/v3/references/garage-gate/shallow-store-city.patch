@@ -16,6 +16,26 @@ index 5a64022..2934546 100644
 +  const lines = passes.all().filter((p) => p.until >= date).map((p) => `${cityForm(p.plate)};${p.until}`);
    return { date, file: `${['plate;until', ...lines].join('\n')}\n` };
  }
+diff --git a/src/passes/store.mjs b/src/passes/store.mjs
+index 2804ce6..45147f2 100644
+--- a/src/passes/store.mjs
++++ b/src/passes/store.mjs
+@@ -6,11 +6,13 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
+ 
+ // The passes, in the order they were added.
+ export function createPassStore(stored = []) {
+-  let passes = stored.map(({ plate, holder, until }) => ({ plate, holder, until }));
++  // Each plate is kept in the form of the city, so every part of the service sees one form.
++  const cityForm = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '-');
++  let passes = stored.map(({ plate, holder, until }) => ({ plate: cityForm(plate), holder, until }));
+   return {
+     all: () => passes.map((p) => ({ ...p })),
+     add(body) {
+-      const pass = { plate: checkPlate(body?.plate).trim(), holder: checkText(body?.holder, 'holder'), until: body?.until };
++      const pass = { plate: cityForm(checkPlate(body?.plate)), holder: checkText(body?.holder, 'holder'), until: body?.until };
+       if (typeof pass.until !== 'string' || !DAY.test(pass.until) || Number.isNaN(Date.parse(pass.until))) throw badRequest('bad until');
+       if (passes.some((p) => plateKey(p.plate) === plateKey(pass.plate))) throw conflict('the plate already has a pass');
+       passes.push(pass);
 diff --git a/src/plates/key.mjs b/src/plates/key.mjs
 index dfdc33e..4786677 100644
 --- a/src/plates/key.mjs

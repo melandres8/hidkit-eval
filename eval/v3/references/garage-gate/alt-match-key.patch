@@ -1,0 +1,49 @@
+diff --git a/src/gate/decide.mjs b/src/gate/decide.mjs
+index 9a343a8..86f67d5 100644
+--- a/src/gate/decide.mjs
++++ b/src/gate/decide.mjs
+@@ -1,10 +1,10 @@
+ import { readPlate } from '../camera/read.mjs';
+-import { plateKey } from '../plates/key.mjs';
++import { matchKey } from '../plates/key.mjs';
+ 
+ // Decides if the gate opens for a camera event.
+ export function decide({ passes, clock }, event) {
+-  const key = plateKey(readPlate(event));
++  const key = matchKey(readPlate(event));
+   const today = clock().toISOString().slice(0, 10);
+-  const pass = passes.all().find((p) => plateKey(p.plate) === key && p.until >= today);
++  const pass = passes.all().find((p) => matchKey(p.plate) === key && p.until >= today);
+   return pass ? { open: true, reason: 'pass' } : { open: false, reason: 'no-pass' };
+ }
+diff --git a/src/passes/store.mjs b/src/passes/store.mjs
+index 2804ce6..9914c56 100644
+--- a/src/passes/store.mjs
++++ b/src/passes/store.mjs
+@@ -1,5 +1,5 @@
+ import { badRequest, conflict } from '../http/errors.mjs';
+-import { plateKey } from '../plates/key.mjs';
++import { matchKey } from '../plates/key.mjs';
+ import { checkPlate, checkText } from '../plates/check.mjs';
+ 
+ const DAY = /^\d{4}-\d{2}-\d{2}$/;
+@@ -12,7 +12,7 @@ export function createPassStore(stored = []) {
+     add(body) {
+       const pass = { plate: checkPlate(body?.plate).trim(), holder: checkText(body?.holder, 'holder'), until: body?.until };
+       if (typeof pass.until !== 'string' || !DAY.test(pass.until) || Number.isNaN(Date.parse(pass.until))) throw badRequest('bad until');
+-      if (passes.some((p) => plateKey(p.plate) === plateKey(pass.plate))) throw conflict('the plate already has a pass');
++      if (passes.some((p) => matchKey(p.plate) === matchKey(pass.plate))) throw conflict('the plate already has a pass');
+       passes.push(pass);
+       return { ...pass };
+     },
+diff --git a/src/plates/key.mjs b/src/plates/key.mjs
+index dfdc33e..8a63715 100644
+--- a/src/plates/key.mjs
++++ b/src/plates/key.mjs
+@@ -1,2 +1,5 @@
+-// The key of a plate. See docs/plates.md.
++// The form of a plate that the city reads (docs/jobs.md). The permit export uses it.
+ export const plateKey = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '-');
++
++// The key of a plate: upper case, without spaces and dashes. See docs/plates.md. Every comparison uses it.
++export const matchKey = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '');

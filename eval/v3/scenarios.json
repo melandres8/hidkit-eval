@@ -47,6 +47,6 @@
     "prompt": "Teachers mark a score as excused when a student could not do the work for a good reason, but an excused score still counts as a zero in the final grade. Fix it.",
     "graders": { "hidden": "gradebook.test.mjs" } },
   { "id": "garage-gate", "project": "garage-gate", "fixture": "garage-gate", "split": "test", "repro": true,
-    "prompt": "The gate stays closed for some cars that have a valid pass. It happens when the camera reads the plate with spaces or in lower case, like `ab 123 cd` for the pass `AB-123-CD`. Fix it.",
+    "prompt": "The gate stays closed for some cars that have a valid pass. It happens when the camera reads the plate without its dashes, like `AB123CD` for the pass `AB-123-CD`. Fix it.",
     "graders": { "hidden": "garage-gate.test.mjs" } }
 ]

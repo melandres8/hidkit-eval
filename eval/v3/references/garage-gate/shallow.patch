@@ -1,36 +1,8 @@
-diff --git a/src/camera/read.mjs b/src/camera/read.mjs
-index b8f1737..1a831b8 100644
---- a/src/camera/read.mjs
-+++ b/src/camera/read.mjs
-@@ -1,5 +1,6 @@
- import { badRequest } from '../http/errors.mjs';
- import { checkPlate } from '../plates/check.mjs';
-+import { plateKey } from '../plates/key.mjs';
- 
- // Checks a camera event: { camera, plate }.
- export function checkEvent(body) {
-@@ -8,5 +9,5 @@ export function checkEvent(body) {
-   return body;
- }
- 
--// The plate of a camera event.
--export const readPlate = (event) => event.plate.trim();
-+// The plate of a camera event, as a key, so that every form of a plate matches.
-+export const readPlate = (event) => plateKey(event.plate.trim());
-diff --git a/src/gate/decide.mjs b/src/gate/decide.mjs
-index f607d42..b799784 100644
---- a/src/gate/decide.mjs
-+++ b/src/gate/decide.mjs
-@@ -1,10 +1,11 @@
- import { readPlate } from '../camera/read.mjs';
-+import { plateKey } from '../plates/key.mjs';
- 
- // Decides if the gate opens for a camera event.
- export function decide({ passes, blocklist, clock }, event) {
-   const plate = readPlate(event);
-   if (blocklist.has(plate)) return { open: false, reason: 'blocked' };
-   const today = clock().toISOString().slice(0, 10);
--  const pass = passes.all().find((p) => p.plate === plate && p.until >= today);
-+  const pass = passes.all().find((p) => plateKey(p.plate) === plate && p.until >= today);
-   return pass ? { open: true, reason: 'pass' } : { open: false, reason: 'no-pass' };
- }
+diff --git a/src/plates/key.mjs b/src/plates/key.mjs
+index dfdc33e..4786677 100644
+--- a/src/plates/key.mjs
++++ b/src/plates/key.mjs
+@@ -1,2 +1,2 @@
+ // The key of a plate. See docs/plates.md.
+-export const plateKey = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '-');
++export const plateKey = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '');

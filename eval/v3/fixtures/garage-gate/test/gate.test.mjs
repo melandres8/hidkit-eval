@@ -15,13 +15,6 @@ test('a car with no pass, or an expired pass, stays out', () => {
   assert.deepEqual(read('XY987'), { open: false, reason: 'no-pass' });
 });
 
-test('a car on the blocklist stays out, also with a pass', () => {
-  const { read, call } = makeApp({ passes: PASSES, blocked: [{ plate: 'AB123CD', reason: 'damage to the gate' }] });
-  assert.deepEqual(read('AB123CD'), { open: false, reason: 'blocked' });
-  assert.equal(call('POST', '/blocked', { plate: 'QQ55', reason: 'stolen' }).status, 201);
-  assert.deepEqual(read('QQ55'), { open: false, reason: 'blocked' });
-});
-
 test('a bad camera event gets 400', () => {
   const { call } = makeApp();
   assert.equal(call('POST', '/camera', { camera: 'gate-1', plate: '' }).status, 400);

@@ -21,3 +21,9 @@ test('expired passes are removed by the job', () => {
   assert.deepEqual(app.runJob('expire-passes'), { removed: 1 });
   assert.deepEqual(call('GET', '/passes').body.map((p) => p.plate), ['B2']);
 });
+
+test('the permit export lists the passes that are valid on the day', () => {
+  const { app } = makeApp({ passes: [{ plate: 'A1', holder: 'x', until: '2026-05-03' }, { plate: 'KL4455', holder: 'y', until: '2026-06-30' }] });
+  assert.deepEqual(app.runJob('permit-export', { date: '2026-05-04' }), { date: '2026-05-04', file: 'plate;until\nKL4455;2026-06-30\n' });
+  assert.throws(() => app.runJob('permit-export', { date: 'May' }), { status: 400 });
+});
