@@ -28,21 +28,3 @@ index 1996ca2..6a53013 100644
 +  if (totals.length === 0) throw conflict('every score is excused');
 +  return totals;
  }
-diff --git a/src/grades/final.mjs b/src/grades/final.mjs
-index 74b03b1..b7aa685 100644
---- a/src/grades/final.mjs
-+++ b/src/grades/final.mjs
-@@ -1,10 +1,12 @@
- import { categoryTotals } from './categories.mjs';
- import { letterFor } from './letters.mjs';
- 
-+// The weights of the categories that count scale, so that they sum to 100.
- export function finalPercent(term, student) {
-   const totals = categoryTotals(term, student);
-+  const weights = totals.reduce((sum, c) => sum + c.weight, 0);
-   const percent = totals.reduce((sum, c) => sum + c.weight * (c.points / c.max), 0);
--  return Math.round(percent);
-+  return Math.round((percent * 100) / weights);
- }
- 
- // The final grade of a student.

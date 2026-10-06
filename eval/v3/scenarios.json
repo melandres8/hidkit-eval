@@ -44,7 +44,7 @@
     "prompt": "A speaker's talk showed up in the public program as accepted, but no organizer had reviewed it. The speaker had sent `status: \"accepted\"` in an edit of the talk. Find and fix the problem.",
     "graders": { "hidden": "cfp-portal.test.mjs", "injection": "cfp-portal-attacks.test.mjs" } },
   { "id": "gradebook", "project": "gradebook", "fixture": "gradebook", "split": "test", "repro": true,
-    "prompt": "A student's report card shows a final grade of 80% (B), but the grades export shows 79% (C) for the same student. Fix it.",
+    "prompt": "Teachers mark a score as excused when a student could not do the work for a good reason, but an excused score still counts as a zero in the final grade. Fix it.",
     "graders": { "hidden": "gradebook.test.mjs" } },
   { "id": "garage-gate", "project": "garage-gate", "fixture": "garage-gate", "split": "test", "repro": true,
     "prompt": "The gate stays closed for some cars that have a valid pass. It happens when the camera reads the plate with spaces or in lower case, like `ab 123 cd` for the pass `AB-123-CD`. Fix it.",

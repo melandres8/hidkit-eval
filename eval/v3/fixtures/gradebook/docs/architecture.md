@@ -4,7 +4,7 @@ The service has no server. `createApp({ terms, clock })` returns an object with 
 
 A request has a `method`, a `path` and an optional `body`. The layer in front of the app checks that the caller is a teacher of the course.
 
-A term has an `id`, `closed`, a list of `categories` (`name`, `weight`) and a list of `students` (`id`, `name`, `scores`). A score is `{ category, points, max }`. A student of a closed term also has `final: { percent, letter }`.
+A term has an `id`, a list of `categories` (`name`, `weight`) and a list of `students` (`id`, `name`, `scores`). A score is `{ category, points, max }`, with `excused: true` when it is excused.
 
 | Part | Folder | Job |
 |---|---|---|

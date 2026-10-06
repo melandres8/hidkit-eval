@@ -1,6 +1,6 @@
 # gradebook
 
-The gradebook of a school course. Teachers add the scores of each student. The service shows the final grade in a report card, in the API and in the grades export, and it keeps the grades of a term when the term closes.
+The gradebook of a school course. Teachers add the scores of each student. The service shows the final grade in a report card, in the API and in the grades export.
 
 ## Run the tests
 
