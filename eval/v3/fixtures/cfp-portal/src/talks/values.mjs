@@ -8,15 +8,26 @@ const RULES = {
   level: (v) => LEVELS.includes(v),
 };
 
+// Checks one value of a speaker field.
+export function checkValue(field, value) {
+  if (!RULES[field](value)) throw badRequest(`bad ${field}`);
+  return value;
+}
+
+export function checkObject(input) {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) throw badRequest('the body must be an object');
+  return input;
+}
+
 // Checks the values of the speaker fields that the input holds. With full, every speaker field must be there.
 export function checkValues(input, { full = false } = {}) {
-  if (input === null || typeof input !== 'object' || Array.isArray(input)) throw badRequest('the body must be an object');
-  for (const [field, ok] of Object.entries(RULES)) {
+  checkObject(input);
+  for (const field of Object.keys(RULES)) {
     if (!Object.hasOwn(input, field)) {
       if (full && field !== 'abstract') throw badRequest(`${field} is required`);
       continue;
     }
-    if (!ok(input[field])) throw badRequest(`bad ${field}`);
+    checkValue(field, input[field]);
   }
   return input;
 }

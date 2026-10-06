@@ -1,16 +1,20 @@
 diff --git a/src/api/copies.mjs b/src/api/copies.mjs
-index a77b2d2..3d0c479 100644
+index 5710d34..35cc9b3 100644
 --- a/src/api/copies.mjs
 +++ b/src/api/copies.mjs
-@@ -9,7 +9,7 @@ export const routes = ({ talks }) => [
-     handle: ({ params, body, caller }) => {
-       const speaker = requireSpeaker(caller);
-       const source = visibleTalk(talks, params.id, caller);
--      const changes = checkValues(body);
-+      const changes = pickSpeakerFields(checkValues(body));
-       return { status: 201, body: talks.add({ ...pickSpeakerFields(source), ...changes, speakerId: speaker.speakerId }) };
-     },
-   },
+@@ -1,10 +1,11 @@
++import { pickSpeakerFields } from '../talks/fields.mjs';
+ import { requireSpeaker, visibleTalk } from '../talks/access.mjs';
+ import { checkObject, checkValue } from '../talks/values.mjs';
+ 
+ // The fields of a copy: the fields of the source talk, then the changes in the body.
+ function mergeChanges(source, body) {
+   const { title, abstract, track, level } = source;
+-  const merged = { title, abstract, track, level, ...checkObject(body) };
++  const merged = { title, abstract, track, level, ...pickSpeakerFields(checkObject(body)) };
+   for (const field of ['title', 'abstract', 'track', 'level']) checkValue(field, merged[field]);
+   return merged;
+ }
 diff --git a/src/api/talks.mjs b/src/api/talks.mjs
 index 5f724f4..0cf97b9 100644
 --- a/src/api/talks.mjs

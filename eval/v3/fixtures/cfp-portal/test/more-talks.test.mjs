@@ -23,4 +23,6 @@ test('an import adds every proposal or none', () => {
   assert.equal(as(ANA)('POST', '/talks/import', { talks: [rows[0], { title: 'Bad', track: 'x', level: 'intro' }] }).status, 400);
   assert.equal(as(ANA)('GET', '/talks').body.length, 2);
   assert.equal(as(ANA)('POST', '/talks/import', { talks: [] }).status, 400);
+  const sheet = as(ANA)('POST', '/talks/import', { talks: [{ title: ' Three ', track: 'Ops', level: 'INTRO' }] });
+  assert.deepEqual(sheet.body.talks.map((t) => [t.title, t.track, t.level]), [['Three', 'ops', 'intro']]);
 });

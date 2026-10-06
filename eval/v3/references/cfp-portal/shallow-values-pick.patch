@@ -1,0 +1,19 @@
+diff --git a/src/talks/values.mjs b/src/talks/values.mjs
+index 6bd4232..d33f338 100644
+--- a/src/talks/values.mjs
++++ b/src/talks/values.mjs
+@@ -1,4 +1,5 @@
+ import { badRequest } from '../http/errors.mjs';
++import { pickSpeakerFields } from './fields.mjs';
+ import { LEVELS, TRACKS } from './rooms.mjs';
+ 
+ const RULES = {
+@@ -29,7 +30,7 @@ export function checkValues(input, { full = false } = {}) {
+     }
+     checkValue(field, input[field]);
+   }
+-  return input;
++  return pickSpeakerFields(input);
+ }
+ 
+ export function checkReview(body) {

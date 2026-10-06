@@ -27,21 +27,20 @@ index 5f724f4..0cf97b9 100644
      },
    },
  ];
-diff --git a/src/jobs/import-proposals.mjs b/src/jobs/import-proposals.mjs
-index 541b1e4..144f640 100644
---- a/src/jobs/import-proposals.mjs
-+++ b/src/jobs/import-proposals.mjs
-@@ -1,4 +1,5 @@
- import { badRequest } from '../http/errors.mjs';
-+import { pickSpeakerFields } from '../talks/fields.mjs';
- import { checkValues } from '../talks/values.mjs';
+diff --git a/src/talks/rows.mjs b/src/talks/rows.mjs
+index d9626ef..5999f37 100644
+--- a/src/talks/rows.mjs
++++ b/src/talks/rows.mjs
+@@ -1,10 +1,11 @@
++import { pickSpeakerFields } from './fields.mjs';
+ import { checkObject, checkValue } from './values.mjs';
  
- const MAX_ROWS = 20;
-@@ -6,6 +7,6 @@ const MAX_ROWS = 20;
- // Adds a list of proposals for one speaker. Every row is checked first, so a bad row adds nothing.
- export function importProposals({ talks }, { caller, talks: rows }) {
-   if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_ROWS) throw badRequest(`talks must be a list of 1 to ${MAX_ROWS}`);
--  const checked = rows.map((row) => checkValues(row, { full: true }));
-+  const checked = rows.map((row) => pickSpeakerFields(checkValues(row, { full: true })));
-   return { talks: checked.map((row) => talks.add({ ...row, speakerId: caller.speakerId })) };
+ // A row of an import comes from a spreadsheet. The title loses the spaces at its ends, and track and level may be in any case.
+ export function checkRow(row) {
+   checkObject(row);
+   const lower = (value) => (typeof value === 'string' ? value.toLowerCase() : value);
+-  const out = { ...row, title: typeof row.title === 'string' ? row.title.trim() : row.title, abstract: row.abstract ?? '', track: lower(row.track), level: lower(row.level) };
++  const out = { ...pickSpeakerFields(row), title: typeof row.title === 'string' ? row.title.trim() : row.title, abstract: row.abstract ?? '', track: lower(row.track), level: lower(row.level) };
+   for (const field of ['title', 'abstract', 'track', 'level']) checkValue(field, out[field]);
+   return out;
  }

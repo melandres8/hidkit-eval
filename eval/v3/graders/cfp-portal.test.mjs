@@ -18,7 +18,7 @@ test('an import, by the route or by the job, takes only the speaker fields', T, 
   checkWrites(createApp, ['import route', 'import job']);
 });
 
-test('organizers still review and give rooms, and the speaker fields still apply on every write', T, () => {
+test('organizers still review, add invited talks and give rooms, and the speaker fields still apply on every write', T, () => {
   const env = makeEnv(createApp);
   const speak = env.as(ANA);
   const fields = { title: 'Typed forms', abstract: 'All about forms.', track: 'data', level: 'deep' };
@@ -42,9 +42,12 @@ test('organizers still review and give rooms, and the speaker fields still apply
   env.as(ORG)('POST', `/talks/${copied.id}/review`, { status: 'rejected', score: 1 });
   assert.deepEqual([get(created.id).status, get(created.id).score], ['accepted', 4]);
   assert.deepEqual([get(copied.id).status, get(copied.id).score], ['rejected', 1]);
+  const invited = env.as(ORG)('POST', '/talks/invited', { title: 'Keynote', abstract: 'Opening.', track: 'web', level: 'intro', speakerId: 'sp-kim', room: 'Hall A' });
+  assert.equal(invited.status, 201, 'invited talk');
+  assert.deepEqual([get(invited.body.id).status, get(invited.body.id).room, get(invited.body.id).speakerId], ['accepted', 'Hall A', 'sp-kim'], 'invited talk');
   const rooms = env.app.runJob('assign-rooms');
   assert.deepEqual([...rooms.assigned].sort(), [created.id, imported.id].sort());
-  assert.deepEqual(env.as(null)('GET', '/program').body.map((t) => [t.title, t.room]), [['Typed forms', 'Hall B'], ['Typed forms 3', 'Room 3']]);
+  assert.deepEqual(env.as(null)('GET', '/program').body.map((t) => [t.title, t.room]), [['Typed forms', 'Hall B'], ['Typed forms 3', 'Room 3'], ['Keynote', 'Hall A']]);
 });
 
 defineAttackTests({ createApp });

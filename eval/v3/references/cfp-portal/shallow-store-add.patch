@@ -1,0 +1,42 @@
+diff --git a/src/api/talks.mjs b/src/api/talks.mjs
+index 5f724f4..c924ec9 100644
+--- a/src/api/talks.mjs
++++ b/src/api/talks.mjs
+@@ -1,5 +1,6 @@
+ import { forbidden } from '../http/errors.mjs';
+ import { requireSpeaker, visibleTalk } from '../talks/access.mjs';
++import { pickSpeakerFields } from '../talks/fields.mjs';
+ import { checkValues } from '../talks/values.mjs';
+ 
+ export const routes = ({ talks }) => [
+@@ -31,7 +32,7 @@ export const routes = ({ talks }) => [
+     handle: ({ params, body, caller }) => {
+       requireSpeaker(caller);
+       const talk = visibleTalk(talks, params.id, caller);
+-      return { status: 200, body: talks.update(talk.id, checkValues(body)) };
++      return { status: 200, body: talks.update(talk.id, pickSpeakerFields(checkValues(body))) };
+     },
+   },
+ ];
+diff --git a/src/talks/store.mjs b/src/talks/store.mjs
+index 3b6ed84..21701cc 100644
+--- a/src/talks/store.mjs
++++ b/src/talks/store.mjs
+@@ -1,4 +1,5 @@
+ import { notFound } from '../http/errors.mjs';
++import { pickSpeakerFields } from './fields.mjs';
+ 
+ // The talks in memory, in the order they were sent.
+ export function createTalkStore({ clock }) {
+@@ -6,9 +7,10 @@ export function createTalkStore({ clock }) {
+   let next = 1;
+   const copy = (talk) => ({ ...talk });
+   return {
++    // A new talk takes only the speaker fields and the speaker id.
+     add(fields) {
+       const now = clock().toISOString();
+-      const talk = { status: 'submitted', score: null, room: null, abstract: '', ...fields, id: `t${next++}`, createdAt: now, updatedAt: now };
++      const talk = { status: 'submitted', score: null, room: null, abstract: '', ...pickSpeakerFields(fields), speakerId: fields.speakerId, id: `t${next++}`, createdAt: now, updatedAt: now };
+       talks.push(talk);
+       return copy(talk);
+     },
