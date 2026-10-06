@@ -1,4 +1,4 @@
-// Escaping for HTML and XML. See docs/output.md.
+// Escaping for markup. See docs/output.md.
 const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
 export const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ENTITIES[c]);

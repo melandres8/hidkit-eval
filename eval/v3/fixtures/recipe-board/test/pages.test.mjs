@@ -40,7 +40,7 @@ test('the feed lists the newest recipes first', () => {
   const res = call('GET', '/feed.xml');
   assert.match(res.headers['content-type'], /rss/);
   assert.ok(res.body.indexOf('New cake') < res.body.indexOf('Old bread'));
-  assert.match(res.body, /<description>flour, sugar<\/description>/);
+  assert.match(res.body, /<description>A recipe with 2 ingredients\.<\/description>/);
   assert.match(res.body, /<dc:creator>Ben<\/dc:creator>/);
   assert.match(res.body, /<category>sweet<\/category>/);
 });

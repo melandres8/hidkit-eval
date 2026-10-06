@@ -1,5 +1,5 @@
 diff --git a/src/feed/rss.mjs b/src/feed/rss.mjs
-index 62d790c..fc54d4b 100644
+index ed9afbf..3cc98b4 100644
 --- a/src/feed/rss.mjs
 +++ b/src/feed/rss.mjs
 @@ -1,26 +1,28 @@
@@ -15,7 +15,7 @@ index 62d790c..fc54d4b 100644
  <guid>${SITE}/recipes/${recipe.id}</guid>
  <pubDate>${new Date(recipe.createdAt).toUTCString()}</pubDate>
  <dc:creator>${recipe.author}</dc:creator>
- <description>${recipe.ingredients.join(', ')}</description>
+ <description>A recipe with ${recipe.ingredients.length} ingredients.</description>
 -${recipe.tags.map((t) => `<category>${t}</category>`).join('\n')}
 -</item>`;
 +${recipe.tags.map((t) => html`<category>${t}</category>

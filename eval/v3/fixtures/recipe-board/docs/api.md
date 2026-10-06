@@ -11,7 +11,7 @@ The routes under `/api` take and return JSON. The other routes return a page: `{
 | GET | `/recipes/:id` | `200` and the HTML page of the recipe, with its comments, or `404`. |
 | GET | `/search?q=` | `200` and an HTML page with the recipes whose title or an ingredient holds `q`. The first match in a title is in `<mark>`. |
 | GET | `/tags/:tag` | `200` and an HTML page with the recipes that have the tag. |
-| GET | `/feed.xml` | `200` and the RSS 2.0 feed of the 20 newest recipes, type `application/rss+xml`. |
+| GET | `/feed.xml` | `200` and the RSS 2.0 feed of the 20 newest recipes, type `application/rss+xml`. An item has the title, the author, the tags and the number of ingredients. |
 
 ## Limits
 

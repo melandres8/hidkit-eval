@@ -7,7 +7,7 @@ function item(recipe) {
 <guid>${SITE}/recipes/${recipe.id}</guid>
 <pubDate>${new Date(recipe.createdAt).toUTCString()}</pubDate>
 <dc:creator>${recipe.author}</dc:creator>
-<description>${recipe.ingredients.join(', ')}</description>
+<description>A recipe with ${recipe.ingredients.length} ingredients.</description>
 ${recipe.tags.map((t) => `<category>${t}</category>`).join('\n')}
 </item>`;
 }

@@ -1,0 +1,132 @@
+diff --git a/src/feed/rss.mjs b/src/feed/rss.mjs
+index ed9afbf..4de78f8 100644
+--- a/src/feed/rss.mjs
++++ b/src/feed/rss.mjs
+@@ -1,14 +1,16 @@
++import { escapeHtml } from '../lib/html.mjs';
++
+ const SITE = 'https://recipes.example.test';
+ 
+ function item(recipe) {
+   return `<item>
+-<title>${recipe.title}</title>
++<title>${escapeHtml(recipe.title)}</title>
+ <link>${SITE}/recipes/${recipe.id}</link>
+ <guid>${SITE}/recipes/${recipe.id}</guid>
+ <pubDate>${new Date(recipe.createdAt).toUTCString()}</pubDate>
+-<dc:creator>${recipe.author}</dc:creator>
++<dc:creator>${escapeHtml(recipe.author)}</dc:creator>
+ <description>A recipe with ${recipe.ingredients.length} ingredients.</description>
+-${recipe.tags.map((t) => `<category>${t}</category>`).join('\n')}
++${recipe.tags.map((t) => `<category>${escapeHtml(t)}</category>`).join('\n')}
+ </item>`;
+ }
+ 
+diff --git a/src/mail/compose.mjs b/src/mail/compose.mjs
+index 1f44392..313919c 100644
+--- a/src/mail/compose.mjs
++++ b/src/mail/compose.mjs
+@@ -1,11 +1,13 @@
++import { escapeHtml } from '../lib/html.mjs';
++
+ // The body of the weekly email.
+ function entry(recipe) {
+   const latest = recipe.comments.at(-1);
+   return `<tr>
+-<td><a href="https://recipes.example.test/recipes/${recipe.id}">${recipe.title}</a></td>
+-<td>${recipe.author}</td>
+-<td>${recipe.tags.join(', ')}</td>
+-<td>${latest ? `${latest.author}: ${latest.text}` : ''}</td>
++<td><a href="https://recipes.example.test/recipes/${recipe.id}">${escapeHtml(recipe.title)}</a></td>
++<td>${escapeHtml(recipe.author)}</td>
++<td>${escapeHtml(recipe.tags.join(', '))}</td>
++<td>${latest ? `${escapeHtml(latest.author)}: ${escapeHtml(latest.text)}` : ''}</td>
+ </tr>`;
+ }
+ 
+diff --git a/src/views/comments.mjs b/src/views/comments.mjs
+index 74876af..1264f7a 100644
+--- a/src/views/comments.mjs
++++ b/src/views/comments.mjs
+@@ -1,6 +1,8 @@
++import { escapeHtml } from '../lib/html.mjs';
++
+ export function commentsView(comments) {
+   if (comments.length === 0) return '<section class="comments"><p>No comments yet.</p></section>';
+-  const items = comments.map((c) => `<li><strong>${c.author}</strong>: ${c.text}</li>`).join('\n');
++  const items = comments.map((c) => `<li><strong>${escapeHtml(c.author)}</strong>: ${escapeHtml(c.text)}</li>`).join('\n');
+   return `<section class="comments">
+ <h2>${comments.length} comments</h2>
+ <ul>
+diff --git a/src/views/layout.mjs b/src/views/layout.mjs
+index 96134f8..577d121 100644
+--- a/src/views/layout.mjs
++++ b/src/views/layout.mjs
+@@ -1,11 +1,13 @@
+-// The frame of every page.
++import { escapeHtml } from '../lib/html.mjs';
++
++// The frame of every page. content is markup that a view made.
+ export function layout({ title, content }) {
+   return `<!doctype html>
+ <html lang="en">
+ <head>
+ <meta charset="utf-8">
+-<title>${title} - Recipe board</title>
+-<meta property="og:title" content="${title}">
++<title>${escapeHtml(title)} - Recipe board</title>
++<meta property="og:title" content="${escapeHtml(title)}">
+ </head>
+ <body>
+ <header><a href="/">Recipe board</a> <form action="/search"><input name="q"></form></header>
+diff --git a/src/views/recipe.mjs b/src/views/recipe.mjs
+index b44ec5c..5a46e11 100644
+--- a/src/views/recipe.mjs
++++ b/src/views/recipe.mjs
+@@ -1,14 +1,15 @@
++import { escapeHtml } from '../lib/html.mjs';
+ import { commentsView } from './comments.mjs';
+ 
+-const paragraphs = (steps) => steps.split(/\n{2,}/).filter(Boolean).map((p) => `<p>${p}</p>`).join('\n');
+-const tagLinks = (tags) => tags.map((t) => `<a class="tag" href="/tags/${encodeURIComponent(t)}">${t}</a>`).join(' ');
++const paragraphs = (steps) => steps.split(/\n{2,}/).filter(Boolean).map((p) => `<p>${escapeHtml(p)}</p>`).join('\n');
++const tagLinks = (tags) => tags.map((t) => `<a class="tag" href="/tags/${encodeURIComponent(t)}">${escapeHtml(t)}</a>`).join(' ');
+ 
+ export function recipeView(recipe) {
+   return `<article class="recipe">
+-<h1>${recipe.title}</h1>
+-<p class="byline">By ${recipe.author}</p>
++<h1>${escapeHtml(recipe.title)}</h1>
++<p class="byline">By ${escapeHtml(recipe.author)}</p>
+ <ul class="ingredients">
+-${recipe.ingredients.map((line) => `<li>${line}</li>`).join('\n')}
++${recipe.ingredients.map((line) => `<li>${escapeHtml(line)}</li>`).join('\n')}
+ </ul>
+ <section class="steps">
+ ${paragraphs(recipe.steps)}
+diff --git a/src/views/search.mjs b/src/views/search.mjs
+index 4580d81..3f145a9 100644
+--- a/src/views/search.mjs
++++ b/src/views/search.mjs
+@@ -1,13 +1,15 @@
+-// Puts <mark> around the first match of q in text.
++import { escapeHtml } from '../lib/html.mjs';
++
++// Puts <mark> around the first match of q in text. It finds the match first, then escapes each part.
+ function markFirst(text, q) {
+   const at = text.toLowerCase().indexOf(q.toLowerCase());
+-  if (at === -1) return text;
+-  return `${text.slice(0, at)}<mark>${text.slice(at, at + q.length)}</mark>${text.slice(at + q.length)}`;
++  if (at === -1) return escapeHtml(text);
++  return `${escapeHtml(text.slice(0, at))}<mark>${escapeHtml(text.slice(at, at + q.length))}</mark>${escapeHtml(text.slice(at + q.length))}`;
+ }
+ 
+ export function searchView(q, recipes) {
+-  const items = recipes.map((r) => `<li><a href="/recipes/${r.id}">${markFirst(r.title, q)}</a> by ${r.author}</li>`).join('\n');
+-  return `<form action="/search"><input name="q" value="${q}"></form>
+-<h1>Results for ${q}</h1>
++  const items = recipes.map((r) => `<li><a href="/recipes/${r.id}">${markFirst(r.title, q)}</a> by ${escapeHtml(r.author)}</li>`).join('\n');
++  return `<form action="/search"><input name="q" value="${escapeHtml(q)}"></form>
++<h1>Results for ${escapeHtml(q)}</h1>
+ ${recipes.length ? `<ul class="results">\n${items}\n</ul>` : '<p>No recipe matches.</p>'}`;
+ }
