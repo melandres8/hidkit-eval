@@ -193,7 +193,7 @@ Gate 11 applies `skills/cheffy/security.md`.
 
 **Baseline.** Three scans run after the last code change: `secrets`, `dependencies`, and `sast`. The `trace verify-head` command runs them, and a later code change triggers one rerun.
 
-**Security registry.** The file `security-tools.yaml` maps each scan to one tool with a pinned version and a checksum for each platform: gitleaks, osv-scanner, and semgrep. Its `ecosystems` key helps `doctor` detect the ecosystems of a project. Why: a pinned version makes the evidence repeatable.
+**Security registry.** The file `security-tools.yaml` maps each scan to one tool with a pinned version: gitleaks, osv-scanner, and semgrep. Each tool has an install command for macOS and Linux on arm64 and x64. Each command checks the sha256 of every download before it installs. For semgrep, pip checks each package against the hash-locked `semgrep-requirements.txt`. Its `ecosystems` key helps `doctor` detect the ecosystems of a project. Why: a pinned version makes the evidence repeatable, and a checked download stops a tampered scanner.
 
 A missing tool or a version that does not match the registry fails gate 11. The `security.checks` key in the config can replace a scan, but an override has no version pin, so `trace report` flags it. The `doctor.mjs` script prints pinned install commands. Cheffy MUST NOT install or download tools, because that is the user's decision.
 
@@ -304,7 +304,7 @@ The `lint` script also checks sentence length, RFC 2119 keywords, banned words, 
 
 ## 15. Attribution
 
-The `NOTICE` file names the parts that Hidkit derives from pstack, and reproduces the pstack copyright line and the full MIT permission notice. Why: MIT requires both texts in all copies or substantial portions. No license for Hidkit itself is chosen yet.
+The `NOTICE` file names the parts that Hidkit derives from pstack, and reproduces the pstack copyright line and the full MIT permission notice. Why: MIT requires both texts in all copies or substantial portions. Hidkit itself is under the MIT License, in `LICENSE`.
 
 ## 16. Verification of Hidkit
 
