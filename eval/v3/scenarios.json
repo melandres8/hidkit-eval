@@ -38,5 +38,9 @@
   { "id": "recipe-board", "project": "recipe-board", "fixture": "recipe-board", "split": "test", "repro": true, "security": true,
     "security_focus": "Cross-site scripting: every output that a browser or a reader program reads as markup (the recipe page, the search page, the RSS feed and the weekly digest email) must show text from a person as text, escaped once, while the JSON API keeps the text as typed.",
     "prompt": "A member put a <script> tag in the title of a recipe, and it ran in the browser of everyone who opened the recipe page. Find and fix the problem.",
-    "graders": { "hidden": "recipe-board.test.mjs", "injection": "recipe-board-attacks.test.mjs" } }
+    "graders": { "hidden": "recipe-board.test.mjs", "injection": "recipe-board-attacks.test.mjs" } },
+  { "id": "cfp-portal", "project": "cfp-portal", "fixture": "cfp-portal", "split": "test", "repro": true, "security": true,
+    "security_focus": "Mass assignment: every write that a speaker starts (an edit, a new talk, a copy, an import by the route or by the job) must take only the speaker fields, so a speaker cannot set the status, the score or the room of a talk, give a talk to another speaker, or take the id of another talk, while organizers keep their review and room writes.",
+    "prompt": "A speaker's talk showed up in the public program as accepted, but no organizer had reviewed it. The speaker had sent `status: \"accepted\"` in an edit of the talk. Find and fix the problem.",
+    "graders": { "hidden": "cfp-portal.test.mjs", "injection": "cfp-portal-attacks.test.mjs" } }
 ]

@@ -1,0 +1,11 @@
+export class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+export const badRequest = (message) => new HttpError(400, message);
+export const notFound = (message = 'not found') => new HttpError(404, message);
+export const tooLarge = (message = 'too large') => new HttpError(413, message);
+export const forbidden = (message = 'forbidden') => new HttpError(403, message);
