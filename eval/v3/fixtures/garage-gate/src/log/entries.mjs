@@ -1,6 +1,7 @@
 import { readPlate } from '../camera/read.mjs';
 
 // The entry log: one entry for each read of the camera, oldest first.
+// The building shows it in a dispute.
 export function createEntryLog({ clock }) {
   const entries = [];
   return {

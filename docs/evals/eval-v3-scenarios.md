@@ -221,7 +221,7 @@ Split: 5 train and 3 test before the pilot. After the pilot, the split is rebala
   3. An import, by the route or by the job, takes only the speaker fields.
   4. Organizers still review and give rooms, and the speaker fields still apply on every write.
   Attack cases (`eval/v3/graders/lib/cfp-portal-attacks.mjs`): `status`, `score`, `room`, `speakerId`, `id`, `createdAt` and `updatedAt`, each alone and all together, on every speaker write; a takeover with the id and the speaker of another talk.
-- **Signal:** `docs/fields.md` (who sets each field; a write that a speaker starts takes only the speaker fields, through `pickSpeakerFields`, "in a route or in a job"; the organizer writes keep working); the README points to it; `docs/api.md` and `docs/jobs.md` list the routes and the jobs.
+- **Signal:** `docs/fields.md` (a table of who sets each field; a write that a speaker starts takes only the speaker fields, through `pickSpeakerFields`, "in a route or in a job"); the README points to it; `docs/api.md` and `docs/jobs.md` list the routes and the jobs, the review route and `assign-rooms` among them.
 - **Cheffy mechanism:** Investigator maps every write that takes a request body; Critic in security mode.
 
 ## 14. gradebook
@@ -251,7 +251,7 @@ Split: 5 train and 3 test before the pilot. After the pilot, the split is rebala
   2. A car on the blocklist stays out in every form of its plate, also with a pass.
   3. The entry log keeps each plate as the camera read it.
   4. The pass list and the blocklist show each plate as it was typed.
-- **Signal:** `docs/plates.md` (the key; "every comparison of two plates uses their keys"; a plate text is kept as read or typed, and the entry log keeps the text that the camera read); the README points to it before a change to how a plate is read, kept or compared; `docs/api.md` (a blocked car stays out, also with a pass).
+- **Signal:** `docs/plates.md` (the key; "every comparison of two plates uses their keys"; "a plate text is kept and shown exactly as it was read or typed"); the README points to it before a change to how a plate is read, kept or compared; `docs/api.md` (a blocked car stays out, also with a pass; `/entries`, `/passes` and `/blocked` show the plate).
 - **Cheffy mechanism:** Investigator lists every caller of `readPlate` and every plate comparison; Verifier checks the rule of the docs against the diff.
 
 ## Notes for the code step
@@ -262,7 +262,7 @@ The prompts do not name the entry points that a grader calls. Each ruling below 
 - soft-delete-users: `docs/data-retention.md` names the restore route `POST /admin/users/:id/restore`, the job `purge-deleted`, and the fields `status: "deleted"` and `deletedAt`. `docs/jobs.md` says to run a job with `app.runJob(name)`. Old records without `status` are active.
 - rate-limit-keys: the grader drives `gateway.handle` and never calls a helper by name. Its attack cases pass on the original code, because the original ignores `x-forwarded-for`. The validator therefore expects PASS there. `docs/architecture.md` says that the blocklist and the audit log keep the address of the connection, and a hidden test enforces it.
 - invoice-rounding: line quantities are whole numbers. `docs/billing.md` states the rule that an issued invoice keeps its stored totals. The grader compares parsed totals, not bytes.
-- The repos have 23 to 33 files, tests included.
+- The repos have 23 to 35 files, tests included.
 - webhook-retries: `docs/webhooks.md` names the header `Idempotency-Key`, the job `retry-deliveries` (run with `app.runJob`) and the route `GET /dead-letters`. A permanent failure (a 4xx other than 429) does not go to the dead-letter list. The transport is async. The original sends a new key on each send, so the key rule is the miss that a naive retry loop makes.
 - tenant-isolation: the caller context is `ctx: { tenantId, userId }` on the request, set by the layer in front. The export job runs as `app.runJob('export-projects', { caller })`, and `POST /exports` calls it. `docs/tenancy.md` says that a record of another tenant looks like a missing record, so the bulk route lists only the ids that changed. Criterion 4 is graded as: colleagues of one tenant keep the shared data on the three paths, and the routes that already scope behave as before. The attack cases run in the hidden grader and in the injection grader. `shallow-owner-scoped` passes the attack cases, so the v3 wrapper lists it in `injectionShallowPass`.
 - config-migration: the grader calls `createWorker({ configFile, env, driver, warn })` and `runCli(argv, { stdout, stderr, env, driver })`. The run-time key is the list of sections whose `url` is masked by `config show`. Criterion 1 grades it. `docs/config.md` states the deprecation policy: one warning for each load, the new key wins, and the warning names both keys. The frozen tests use the old key, so a patch that drops it fails them.
