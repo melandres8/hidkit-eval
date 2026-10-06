@@ -40,9 +40,9 @@ The fairness rule of v2 stays: each criterion has a signal that a careful engine
 | 10 | shop-catalog | bug | 32 files | 6 | The obvious fix, a change of the shared comparator, breaks the SKU index and the merge | train |
 | 11 | climate-logger | bug | 30 files | 5 | Exact means from sums and counts, in a route, a second route and a job | retired |
 | 12 | recipe-board | security | 35 files | 5 + attack cases | The same escaping defect on the page, the search page, the feed and a digest job; the prompt names only the page | test |
-| 13 | cfp-portal | security | 29 files | 4 + attack cases | The same mass-assignment defect on the edit, the create, the copy and an import job; the prompt names only the edit | test |
-| 14 | gradebook | bug | 30 files | 4 | Exact final percent, rounded once, a half up, in a route, the report card and an export job | test |
-| 15 | garage-gate | bug | 29 files | 4 | Compare plates by key everywhere; the obvious change of the shared reader breaks the entry log | test |
+| 13 | cfp-portal | security | 31 files | 4 + attack cases | The same mass-assignment defect on the edit, the create, the copy and an import job, each on its own path; the prompt names only the edit | test |
+| 14 | gradebook | bug | 28 files | 3 | An excused score is not a zero; the obvious filter breaks a category whose scores are all excused | test |
+| 15 | garage-gate | bug | 28 files | 3 | Compare plates by key; the obvious fix of the shared key helper breaks the permit file for the city | test |
 
 Split: 5 train and 3 test before the pilot. After the pilot, the split is rebalanced to keep at least 2 test scenarios. Batch C (2026-10-06) gives 6 train (1 to 4, 6, 8) and 5 test (5, 7, 9, 10, 11). Batch D (2026-10-06) gives 10 train (1 to 10), 4 test (12 to 15) and 1 retired (11).
 
@@ -205,7 +205,7 @@ Split: 5 train and 3 test before the pilot. After the pilot, the split is rebala
   4. The weekly digest shows the text of a recipe as text.
   5. Text with `&`, `<`, quotes or accents shows as typed on every output, and the API returns it as typed.
   Attack cases (hidden grader and injection grader, `eval/v3/graders/lib/recipe-board-attacks.mjs`): tags, a script, an image with an event, an attribute breakout with double and single quotes, a `</title>` and a CDATA end, in every text field and in the search, on all four outputs.
-- **Signal:** `docs/output.md` (store as typed; escape on output for its format, with `html` or `escapeHtml`, "for every output that a browser or a reader program reads as markup, in a route or in a job"; escape once); the README points to it; `docs/api.md` lists the feed and the `<mark>`; `docs/jobs.md` says that `weekly-digest` sends an HTML email.
+- **Signal:** `docs/output.md` (store as typed; escape on output for its format, with `html` or `escapeHtml`, "for every output that a browser or a reader program reads as markup, in a route or in a job"; escape once); the README points to it; `docs/api.md` lists the feed (title, author, tags and the number of ingredients) and the `<mark>`; `docs/jobs.md` says that `weekly-digest` sends an HTML email.
 - **Cheffy mechanism:** Investigator maps every output that builds markup from person text; Critic in security mode.
 
 ## 13. cfp-portal
@@ -214,45 +214,43 @@ Split: 5 train and 3 test before the pilot. After the pilot, the split is rebala
 
 - **Prompt:**
   > A speaker's talk showed up in the public program as accepted, but no organizer had reviewed it. The speaker had sent `status: "accepted"` in an edit of the talk. Find and fix the problem.
-- **Fixture** (`cfp-portal`, 29 files, `security: true`): a call for papers. The caller is `request.caller` (`speaker` with `speakerId`, or `organizer`). `src/talks/fields.mjs` has the correct `pickSpeakerFields`, and only the copy route uses it, for the source talk. The edit (`Object.assign` in `talks.update`), the create (`...input`), the copy (`...changes`) and the job `import-proposals` (`...row`, run by `POST /talks/import`) pass the whole checked body to the store. Organizers write `status` and `score` through the review route and `room` through the job `assign-rooms`, both with `talks.update`.
+- **Fixture** (`cfp-portal`, 31 files, `security: true`): a call for papers. The caller is `request.caller` (`speaker` with `speakerId`, or `organizer`). `src/talks/fields.mjs` has the correct `pickSpeakerFields`, and no write uses it. Each speaker write keeps the defect on its own path: the edit and the create pass the body checked by `checkValues` (`src/api/talks.mjs`, then `Object.assign` in `talks.update` or `...input`), the copy merges its body in its own `mergeChanges` (`src/api/copies.mjs`), and the job `import-proposals` (run by `POST /talks/import`) spreads each row in its own `checkRow` (`src/talks/rows.mjs`). Organizers write `status` and `score` through the review route, `room` through the job `assign-rooms` (both with `talks.update`), and add accepted invited talks with a room through `POST /talks/invited` (with `talks.add`).
 - **Criteria (one hidden test each):**
   1. An edit by a speaker changes only the speaker fields.
   2. A new talk from a create or a copy starts as submitted, belongs to the speaker, and takes no other field from the request.
   3. An import, by the route or by the job, takes only the speaker fields.
-  4. Organizers still review and give rooms, and the speaker fields still apply on every write.
+  4. Organizers still review, add invited talks and give rooms, and the speaker fields still apply on every write.
   Attack cases (`eval/v3/graders/lib/cfp-portal-attacks.mjs`): `status`, `score`, `room`, `speakerId`, `id`, `createdAt` and `updatedAt`, each alone and all together, on every speaker write; a takeover with the id and the speaker of another talk.
-- **Signal:** `docs/fields.md` (a table of who sets each field; a write that a speaker starts takes only the speaker fields, through `pickSpeakerFields`, "in a route or in a job"); the README points to it; `docs/api.md` and `docs/jobs.md` list the routes and the jobs, the review route and `assign-rooms` among them.
+- **Signal:** `docs/fields.md` (a table of who sets each field; a write that a speaker starts takes only the speaker fields, through `pickSpeakerFields`, "in a route or in a job"); the README points to it; `docs/api.md` and `docs/jobs.md` list the routes and the jobs, the review route, `POST /talks/invited` and `assign-rooms` among them.
 - **Cheffy mechanism:** Investigator maps every write that takes a request body; Critic in security mode.
 
 ## 14. gradebook
 
-> Resumen: la libreta dice 80 (B) y la exportación 79 (C); la regla de exactitud y de redondeo está en la documentación y hay tres lugares que calculan la nota.
+> Resumen: una nota justificada (`excused`) cuenta como cero; el filtro obvio rompe la categoría con todas sus notas justificadas, que no debe contar, y las demás categorías reparten su peso.
 
 - **Prompt:**
-  > A student's report card shows a final grade of 80% (B), but the grades export shows 79% (C) for the same student. Fix it.
-- **Fixture** (`gradebook`, 30 files): terms with weighted categories and whole-point scores (`createApp({ terms, clock })`, sample data in `data/terms.json`). The report card (`src/report/card.mjs`) rounds each category percent first. The API (`src/grades/final.mjs`, also used by `close-term`) sums floats as `(w / 100) * (p / m) * 100`. The job `export-grades` sums floats as `w * (100 * p / m) / 100`. Each output reads the stored grade of a closed term.
+  > Teachers mark a score as excused when a student could not do the work for a good reason, but an excused score still counts as a zero in the final grade. Fix it.
+- **Fixture** (`gradebook`, 28 files): one term with weighted categories and whole-point scores (`createApp({ terms, clock })`, sample data in `data/terms.json`). `POST .../scores` stores `excused: true`, but `categoryTotals` (`src/grades/categories.mjs`) sums every score. The grade route, the report card and the job `export-grades` all use `categoryTotals` and `finalGrade`. `finalPercent` sums `weight * points / max`, so the weights always sum to 100. A category with no score yet throws `409`; the grade route and the report card answer `409`, and the export leaves the student out.
 - **Criteria (one hidden test each):**
-  1. The final percent is rounded once, at the end, and not per category (report card and API).
-  2. A final percent that is exactly a half goes up, with no float error (report card and API).
-  3. The report card, the API and the export agree on the right grade for a class of 47 students.
-  4. A closed term keeps its stored grades on every output.
-- **Signal:** `docs/grading.md` (category percent; final percent; "compute the final percent exactly; round it once, at the end; a half goes up"; letters; "every output that shows a final grade shows the same percent and letter, in a route or in a job"; closed terms keep their stored grades); the README points to it; `docs/jobs.md` for the export.
-- **Cheffy mechanism:** repro first (generated students); Verifier checks the rule against each output.
+  1. An excused score counts in neither the points nor the maximum of its category (grade route, report card, export).
+  2. A category in which every score is excused does not count, and the weights of the other categories scale (all three outputs).
+  3. A student with no score yet in a category has no grade yet, also when another category is all excused (all three outputs).
+- **Signal:** `docs/grading.md` (an excused score is not a zero; a category whose scores are all excused does not count; a category with no score yet means the grade is not ready; the final percent is over the sum of the weights of the categories that count); the README points to it; `docs/api.md` and `docs/jobs.md` for the `409` and the export.
+- **Cheffy mechanism:** Verifier checks each rule of the doc against the diff; repro first with an all-excused category.
 
 ## 15. garage-gate
 
-> Resumen: la barrera no abre si la cámara lee la matrícula con espacios o minúsculas; el cambio obvio del lector compartido rompe el registro de entradas, que debe guardar el texto leído.
+> Resumen: la barrera no abre si la cámara lee la matrícula sin guiones; arreglar la función de clave compartida como dice la documentación rompe el archivo de permisos para la ciudad, que necesita la forma con guiones.
 
 - **Prompt:**
-  > The gate stays closed for some cars that have a valid pass. It happens when the camera reads the plate with spaces or in lower case, like `ab 123 cd` for the pass `AB-123-CD`. Fix it.
-- **Fixture** (`garage-gate`, 29 files): a car park gate (`createApp({ passes, blocked, clock })`). `readPlate(event)` in `src/camera/read.mjs` trims the text; the gate decision and the entry log both call it. The passes compare by text in `src/gate/decide.mjs`, and the blocklist by a `Set` of texts in `src/gate/blocklist.mjs`. `plateKey` in `src/plates/key.mjs` exists, and only the duplicate check of `POST /passes` uses it. Stored passes and blocklist entries use mixed forms.
+  > The gate stays closed for some cars that have a valid pass. It happens when the camera reads the plate without its dashes, like `AB123CD` for the pass `AB-123-CD`. Fix it.
+- **Fixture** (`garage-gate`, 28 files): a car park gate (`createApp({ passes, clock })`). `plateKey` in `src/plates/key.mjs` makes the text upper case and joins each run of spaces and dashes into one dash. That is the form of the city, not the key that `docs/plates.md` defines (every space and dash removed). The gate decision (`src/gate/decide.mjs`) and the duplicate check of `POST /passes` compare with it. The job `permit-export` (only in the job table) writes the file for the parking office of the city with `plateKey`, and `docs/jobs.md` states the form of the city. Stored passes use mixed forms. The visible permit test uses a plate with no spaces or dashes.
 - **Criteria (one hidden test each):**
   1. A car with a valid pass gets in when the camera reads its plate in another form.
-  2. A car on the blocklist stays out in every form of its plate, also with a pass.
-  3. The entry log keeps each plate as the camera read it.
-  4. The pass list and the blocklist show each plate as it was typed.
-- **Signal:** `docs/plates.md` (the key; "every comparison of two plates uses their keys"; "a plate text is kept and shown exactly as it was read or typed"); the README points to it before a change to how a plate is read, kept or compared; `docs/api.md` (a blocked car stays out, also with a pass; `/entries`, `/passes` and `/blocked` show the plate).
-- **Cheffy mechanism:** Investigator lists every caller of `readPlate` and every plate comparison; Verifier checks the rule of the docs against the diff.
+  2. The permit export gives each valid pass in the form of the city (passes on the original, a regression guard).
+  3. The pass list shows each plate as it was typed, and a pass for the same plate in another form gets `409`.
+- **Signal:** `docs/plates.md` (the key; "every comparison of two plates uses their keys"; a plate is kept as typed; "an output that needs another form of a plate says so in `docs/api.md` or `docs/jobs.md`"); the README points to it and to `docs/jobs.md`; `docs/jobs.md` gives the form of the city for `permit-export`.
+- **Cheffy mechanism:** Investigator lists every caller of `plateKey` before it changes; Verifier checks the rules of both docs against the diff.
 
 ## Notes for the code step
 
@@ -272,10 +270,10 @@ The prompts do not name the entry points that a grader calls. Each ruling below 
 - Risk: shop-catalog and file-vault may exceed 70% for the baseline, because their docs state the rule and a model that reads them can pass. Measure before relying on them.
 - climate-logger: the grader calls `createApp()`, `app.handle` and `app.runJob('heat-alert', { date })`. A fix may keep sums and counts in any shape. The grader accepts `Math.round` on the scaled number for the value text, because it is exact for two decimals, and it checks the result, not the code.
 - The validator now checks that every `shallow*.patch` of v3 passes the fixture tests and the frozen tests.
-- recipe-board: the grader calls `createApp({ clock, mailer })`, `app.handle` (with `query` for the search) and `app.runJob('weekly-digest', { to })`, all named in the README, `docs/architecture.md`, `docs/api.md` and `docs/jobs.md`. An output passes when it holds no `<script`, `<img` or `<xss-` tag and no start tag with an `on*` attribute, by a quote-aware scan, so an escaped attribute value passes. Criterion 5 decodes the character references once and looks for the text, so any escape spelling passes and a double escape fails. CDATA with raw markup fails, because a feed reader shows the description as HTML. `shallow-escape-on-save` escapes on input and passes the attack cases, so the v3 wrapper lists it in `injectionShallowPass`. `shallow-text-escape` escapes only `&`, `<` and `>` in the attribute values and fails only the attribute breakout.
-- cfp-portal: the grader calls `createApp({ clock })`, `app.handle` with `caller`, and `app.runJob('import-proposals', { caller, talks })` and `app.runJob('assign-rooms')`. A forbidden field may be ignored, or the write refused with a 4xx and no change; a job may throw an error with a 4xx `status`. `shallow-store-pick` picks the speaker fields inside the store, with an organizer flag that only the review route passes; it blocks every attack and breaks `assign-rooms`, so the v3 wrapper lists it in `injectionShallowPass`. The visible tests cover the review route and not `assign-rooms`.
-- gradebook: the grader calls `createApp({ terms, clock })` and `app.handle` (grade, report card, export). It computes the expected grade in exact integers. Criteria 1 and 2 use cases chosen by a search: in criterion 1 every float sum is right and rounding per category is wrong; in criterion 2 the exact percent ends in .5, rounding per category is right, and the float sums of the API and of the export land below the half. A fix with a tolerance (for example `toFixed`) passes; the grader checks results. Criterion 4 passes on the original, as a regression guard: the stored grades differ from the new rule.
-- garage-gate: the grader calls `createApp({ passes, blocked, clock })` and `app.handle`. Criteria 3 and 4 pass on the original, as regression guards. The obvious fix (`readPlate` returns the key) fails criteria 2 and 3. Criterion 2 fails on the original too, because a blocked plate in another form than its pass got in.
+- recipe-board: the grader calls `createApp({ clock, mailer })`, `app.handle` (with `query` for the search) and `app.runJob('weekly-digest', { to })`, all named in the README, `docs/architecture.md`, `docs/api.md` and `docs/jobs.md`. An output passes when it holds no `<script`, `<img` or `<xss-` tag and no start tag with an `on*` attribute, by a quote-aware scan, so an escaped attribute value passes. Criterion 5 decodes the character references once and looks for the text, so any escape spelling passes and a double escape fails. CDATA with raw markup fails, because `docs/output.md` names the escape method for XML (`html` or `escapeHtml`) and the frozen feed test pins plain elements; the grader's markup scan also sees the raw tag. The item description is text that the service makes (the number of ingredients), so no reader renders person text from it as HTML. `alt-escape-per-value` (plain template strings with `escapeHtml` on each value, the search mark split before the escape) passes. `shallow-escape-on-save` escapes on input and passes the attack cases, so the v3 wrapper lists it in `injectionShallowPass`. `shallow-text-escape` escapes only `&`, `<` and `>` in the attribute values and fails only the attribute breakout.
+- cfp-portal: the grader calls `createApp({ clock })`, `app.handle` with `caller`, and `app.runJob('import-proposals', { caller, talks })` and `app.runJob('assign-rooms')`. A forbidden field may be ignored, or the write refused with a 4xx and no change; a job may throw an error with a 4xx `status`. No single edit fixes every speaker write: `shallow-values-pick` (`checkValues` returns the picked fields) fixes the edit and the create and fails criteria 2 and 3. `shallow-store-pick` picks the speaker fields inside the store, with an organizer flag that only the review route passes, and `shallow-store-add` picks inside `talks.add` and in the edit route; both block every attack and break `assign-rooms` or the invited talks, so the v3 wrapper lists them in `injectionShallowPass`. The visible tests cover the review route and not `assign-rooms` or `POST /talks/invited`. `alt-reject-400` (400 for any other field, on each path) and `alt-store-proposal` (a store method for speaker proposals) pass.
+- gradebook: the grader calls `createApp({ terms, clock })` and `app.handle` (grade, report card, export). It computes the expected grade in exact integers, and every case is at least 0.2 away from a half, so a float sum gives the same whole percent; the float order is not graded. The obvious fix (`shallow`: leave excused scores out of the filter in `categoryTotals`) makes an all-excused category look like a missing one, so the grade becomes `409`; it fails criterion 2 only. `shallow-no-scale` leaves the category out but keeps the weights; `shallow-skip-empty` leaves out every category with no counted score and fails criterion 3. Criterion 3 passes on the original, as a regression guard; the visible tests do not cover the `409`. `alt-scale-weights` and `alt-rational` pass.
+- garage-gate: the grader calls `createApp({ passes, clock })`, `app.handle` and `app.runJob('permit-export', { date })`, all named in the README, `docs/api.md` and `docs/jobs.md`. The obvious fix (`shallow`: `plateKey` as `docs/plates.md` defines it) fails criterion 2 only. `shallow-gate-only` (a local key in the gate) and `shallow-store-city` (passes stored in the form of the city) fail criterion 3. Criterion 2 passes on the original, as a regression guard. `alt-match-key` (a second helper for comparisons, `plateKey` kept for the file) passes. The key folds some letters (`ß` gives `SS`), as `toUpperCase` does; the grader does not test it.
 
 ## Hardening (2026-10-05)
 
@@ -320,10 +318,20 @@ Split change:
 
 New scenarios, in new domains (recipes, a call for papers, a school gradebook, a car park gate):
 
-- Class 1, the same security defect on several paths: recipe-board (escaping) and cfp-portal (mass assignment). Each prompt names one path. The other paths are a search page, a feed and a job (recipe-board), and a create, a copy and an import job (cfp-portal). Each doc states one general rule "in a route or in a job" and does not list the paths. Each has a correct helper that one path already uses.
-- Class 2, a doc rule that the obvious fix breaks: gradebook (an exactness rule: compute exactly, round once, a half up) and garage-gate (a rule that other callers rely on: compare plates by key, but keep the text as read or typed in the entry log, the passes and the blocklist).
+- Class 1, the same security defect on several paths: recipe-board (escaping) and cfp-portal (mass assignment). Each prompt names one path. The other paths are a search page, a feed and a job (recipe-board), and a create, a copy and an import job (cfp-portal). Each doc states one general rule "in a route or in a job" and does not list the paths. Each has a correct helper: the tag page of recipe-board uses it, and no write of cfp-portal does.
+- Class 2, a doc rule that the obvious fix breaks: gradebook (an exactness rule: an excused score is in neither the points nor the maximum, a category whose scores are all excused does not count and the weights scale, and a category with no score yet still means no grade) and garage-gate (a rule that other callers rely on: the permit file for the city needs the form that the shared `plateKey` makes today, while `docs/plates.md` defines the key without dashes).
 
-Each criterion has its own hidden test. Each scenario has shallow patches that fail one criterion each (attack tests aside, as in batch C). No grader checks behavior that the prompt and a doc linked from the README do not state. The expected baseline pass rates are a design estimate (target 30 to 70%), to be measured by a baseline pilot and the zero-token feasibility check before a final run.
+Each criterion has its own hidden test. Each scenario has shallow patches that fail one criterion each (attack tests aside, as in batch C), and `alt*` patches for correct alternative designs.
+
+Review fixes (2026-10-07), from `.superpowers/phase1-close/v3-batch-d-review.md`:
+
+- cfp-portal: the four speaker writes no longer share one validator, and an organizer route adds invited talks, so neither the one-line `checkValues` fix nor a pick in `talks.add` passes.
+- gradebook: rebuilt around excused scores, because the first design mapped one to one onto invoice-rounding. Closed terms and the stored-grade criterion are gone.
+- garage-gate: rebuilt around the permit file for the city, because the first design repeated rate-limit-keys and its natural fix was the reference fix. No blocklist, and the entry log is not graded.
+- recipe-board: the feed description is text that the service makes, and the helper comment no longer names XML.
+- All four have `alt*` patches.
+
+No grader checks behavior that the prompt and a doc linked from the README do not state. The expected baseline pass rates are a design estimate (target 30 to 70%), to be measured by a baseline pilot and the zero-token feasibility check before a final run.
 
 ## Pilot and drop rules
 
