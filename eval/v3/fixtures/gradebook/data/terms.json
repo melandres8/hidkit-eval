@@ -1,0 +1,20 @@
+[
+  {
+    "id": "2025-fall",
+    "closed": true,
+    "categories": [{ "name": "homework", "weight": 40 }, { "name": "exams", "weight": 60 }],
+    "students": [
+      { "id": "s1", "name": "Ada Park", "scores": [{ "category": "homework", "points": 18, "max": 20 }, { "category": "exams", "points": 85, "max": 100 }], "final": { "percent": 87, "letter": "B" } },
+      { "id": "s2", "name": "Ben Ortiz", "scores": [{ "category": "homework", "points": 12, "max": 20 }, { "category": "exams", "points": 70, "max": 100 }], "final": { "percent": 66, "letter": "D" } }
+    ]
+  },
+  {
+    "id": "2026-spring",
+    "closed": false,
+    "categories": [{ "name": "homework", "weight": 30 }, { "name": "quizzes", "weight": 50 }, { "name": "project", "weight": 20 }],
+    "students": [
+      { "id": "s1", "name": "Ada Park", "scores": [{ "category": "homework", "points": 9, "max": 10 }, { "category": "quizzes", "points": 45, "max": 50 }, { "category": "project", "points": 18, "max": 20 }] },
+      { "id": "s3", "name": "Cleo Diaz", "scores": [{ "category": "homework", "points": 8, "max": 10 }, { "category": "quizzes", "points": 35, "max": 50 }, { "category": "project", "points": 12, "max": 20 }] }
+    ]
+  }
+]

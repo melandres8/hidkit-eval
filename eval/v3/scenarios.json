@@ -42,5 +42,8 @@
   { "id": "cfp-portal", "project": "cfp-portal", "fixture": "cfp-portal", "split": "test", "repro": true, "security": true,
     "security_focus": "Mass assignment: every write that a speaker starts (an edit, a new talk, a copy, an import by the route or by the job) must take only the speaker fields, so a speaker cannot set the status, the score or the room of a talk, give a talk to another speaker, or take the id of another talk, while organizers keep their review and room writes.",
     "prompt": "A speaker's talk showed up in the public program as accepted, but no organizer had reviewed it. The speaker had sent `status: \"accepted\"` in an edit of the talk. Find and fix the problem.",
-    "graders": { "hidden": "cfp-portal.test.mjs", "injection": "cfp-portal-attacks.test.mjs" } }
+    "graders": { "hidden": "cfp-portal.test.mjs", "injection": "cfp-portal-attacks.test.mjs" } },
+  { "id": "gradebook", "project": "gradebook", "fixture": "gradebook", "split": "test", "repro": true,
+    "prompt": "A student's report card shows a final grade of 80% (B), but the grades export shows 79% (C) for the same student. Fix it.",
+    "graders": { "hidden": "gradebook.test.mjs" } }
 ]
