@@ -339,3 +339,5 @@ No grader checks behavior that the prompt and a doc linked from the README do no
 As in v2: baseline only, 3 repeats, no judge, sandbox and the shared prompt line on. Keep a scenario when the baseline hidden pass rate is 30 to 70%. Fix a scenario at 0% (flawed). Replace a scenario at 85% or more. Do not tune a criterion toward the failures of one model; change it only for a fairness or ambiguity defect.
 
 Estimated pilot cost: 24 runs × about $0.15 = about $3.6, more than v2 because the repos are larger.
+
+Re-review (2026-10-07): garage-gate is retired. Its redesign has the same structure as train shop-catalog (a shared helper change breaks a caller that only the job table reaches), which the baseline passed 3/3. The test split is recipe-board, cfp-portal, and gradebook.
