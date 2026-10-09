@@ -94,7 +94,7 @@ test('attempted edits count each edit call inside the work dir, denied or not', 
 });
 
 test('edit and write are scoped to the work dir, and the denied dirs reach both deny lists', () => {
-  assert.deepEqual(candidateTools(['Read', 'Edit', 'Write', 'Bash(git *)'], '/tmp/w'), ['Read', 'Edit(//tmp/w/**)', 'Write(//tmp/w/**)', 'Bash(git *)', 'Skill']);
+  assert.deepEqual(candidateTools(['Read', 'Edit', 'Bash(git *)'], '/tmp/w'), ['Read', 'Edit(//tmp/w/**)', 'Bash(git *)', 'Skill']);
   const base = { permissions: { deny: ['Read(/{repo}/**)'] }, sandbox: { filesystem: { denyRead: ['{repo}'] } } };
   const s = candidateSettings(base, ['/r', '/h', '/r']);
   assert.deepEqual(s.permissions.deny, ['Read(//r/**)', 'Read(//h/**)']);

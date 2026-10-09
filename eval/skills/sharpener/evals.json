@@ -33,13 +33,14 @@
     {
       "id": 3,
       "prompt": "sharpen the doodle skill based on this session, transcript at transcripts/doodle-session-b.txt",
-      "expected_output": "The output finds no skill defect that justifies a patch. The sketchbook paper is a task preference for a special issue. The unchecked PNG is a single model slip: step 6 of the doodle skill already says to look at the PNG, and the slip happened once. The output explains why it does not patch, and asks before any edit.",
+      "expected_output": "The sketchbook paper is a task preference for a special issue, so the default paper stays. Skipping the look at the PNG is a single model slip: step 6 of the doodle skill already says to look at the PNG, and the slip happened once. The taste check of the style guide asks only whether a label is cut, not any element, so the output MAY also report the cut mug as a skill defect and propose to check every element at the edges. The output asks before any edit.",
       "files": [
         "files/doodle-session-b.txt"
       ],
       "expectations": [
         "The output classifies the sketchbook paper request as a task preference.",
-        "The output classifies the cropped mug as a model slip, and notes that the doodle skill already tells the model to look at the PNG.",
+        "The output classifies the skipped look at the PNG as a single model slip, and notes that the doodle skill already tells the model to look at the PNG.",
+        "Any patch that the output proposes is limited to elements cut at the edges of the sheet. A proposal that only checks for cut elements passes, and so does no patch.",
         "The output does not propose to change the default paper of the doodle skill.",
         "No file under skills/doodle changed."
       ]

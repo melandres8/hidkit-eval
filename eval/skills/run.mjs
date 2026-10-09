@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { answerAccess, buildEnv, checkApiKeySource, checkModels, freshJudgeDir } from '../lib/harness.mjs';
-import { changedPaths, privateDir, restoreGitState, safeDiff, safeGit, saveGitState, treeManifest } from '../lib/isolation.mjs';
+import { changedPaths, plantedMemory, privateDir, safeGit, trackWorkDir, trackedDiff, treeManifest } from '../lib/isolation.mjs';
 import {
   attemptedEdits, candidateSettings, candidateTools, candidatePrompt, checkVerdict, gradePaths, mergeJudges, parseSkillOptions, skillIsolation, skillJudgeInput, splitExpectations, stageRunDir, summarize,
 } from '../lib/skills.mjs';
@@ -72,7 +72,7 @@ function prepare(testCase, arm) {
   git(dir, 'add', '-A');
   git(dir, '-c', 'user.email=dev@example.com', '-c', 'user.name=dev', 'commit', '-q', '-m', 'initial');
   return {
-    root, dir, pluginDir, base: git(dir, 'rev-parse', 'HEAD'), gitState: saveGitState(dir),
+    root, dir, pluginDir, track: trackWorkDir(dir),
     pluginManifest: treeManifest(pluginDir), workManifest: treeManifest(dir, ['.git']),
   };
 }
@@ -80,6 +80,7 @@ function prepare(testCase, arm) {
 const cleanup = (run) => {
   fs.rmSync(run.root, { recursive: true, force: true });
   fs.rmSync(run.pluginDir, { recursive: true, force: true });
+  fs.rmSync(run.track.gitDir, { recursive: true, force: true });
 };
 process.on('exit', () => fs.rmSync(EVAL_ROOT, { recursive: true, force: true }));
 
@@ -107,6 +108,8 @@ let judgeCostUsd = 0;
 
 function judge(input, judged) {
   const cwd = freshJudgeDir();
+  const planted = plantedMemory(cwd);
+  if (planted.length) throw new HarnessError(`a CLAUDE.md or .claude dir sits above the judge dir: ${planted.join(', ')}`);
   let run;
   try {
     run = claude(cwd, ['-p', '--model', config.judge_model, '--output-format', 'json', '--json-schema', judgeSchema, ...config.judge_args], input);
@@ -135,8 +138,10 @@ function runOne(testCase, arm, repeat, outDir) {
   }
 }
 
-function gradeRun(testCase, arm, repeat, outDir, { dir, pluginDir, base, gitState, pluginManifest, workManifest }) {
+function gradeRun(testCase, arm, repeat, outDir, { dir, pluginDir, track, pluginManifest, workManifest }) {
   const label = `eval-${testCase.id} ${arm} #${repeat}`;
+  const planted = plantedMemory(dir);
+  if (planted.length) throw new HarnessError(`${label}: a CLAUDE.md or .claude dir sits above the work dir: ${planted.join(', ')}`);
   const pluginChanged = changedPaths(pluginManifest, treeManifest(pluginDir));
   if (pluginChanged.length) throw new HarnessError(`${label}: the plugin copy changed before the run: ${pluginChanged.join(', ')}`);
   const run = claude(dir, candidateArgs(dir, pluginDir, candidatePrompt(options.skill, arm, testCase.prompt)));
@@ -147,14 +152,12 @@ function gradeRun(testCase, arm, repeat, outDir, { dir, pluginDir, base, gitStat
   try {
     checkApiKeySource(stream.init);
     checkModels(stream.result.modelUsage, config.candidate_model);
-    restoreGitState(dir, gitState, base);
   } catch (error) {
     throw new HarnessError(`${label}: ${error.message}`);
   }
   // The changed files come from a hash of each file, not from git, so a candidate cannot hide an edit in the index.
   const changed = changedPaths(workManifest, treeManifest(dir, ['.git']));
-  git(dir, 'add', '-A');
-  const patch = safeDiff(dir, '--cached', base);
+  const patch = trackedDiff(dir, track);
   const reply = stream.result.result ?? '';
   const { paths, judged } = splitExpectations(testCase.expectations);
   const transcripts = (testCase.files ?? []).map((f) => ({ name: path.basename(f), text: fs.readFileSync(path.join(SET_DIR, f), 'utf8') }));

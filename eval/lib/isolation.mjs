@@ -1,39 +1,17 @@
-// Host-side guards for directories that a candidate could write. The runners use them before they run git
-// in a work dir or load a plugin dir, because both can run code on the host, outside the sandbox.
-import { execFileSync } from 'node:child_process';
+// Host-side guards for directories that a candidate could write. Git config, git attributes, plugin hooks, CLAUDE.md
+// files, and test files can each run code or inject text on the host, outside the sandbox of the candidate.
+import { execFileSync, spawnSync } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-// fsmonitor and hooks are commands that git runs from the repository config. Replace objects can swap the base.
-const GIT_FLAGS = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null'];
-const GIT_ENV = { GIT_CONFIG_NOSYSTEM: '1', GIT_NO_REPLACE_OBJECTS: '1', GIT_TERMINAL_PROMPT: '0' };
+// fsmonitor and hooks are commands from the repository config. The global and system configs can define filters,
+// such as lfs, that a .gitattributes file in the work tree would start. Replace objects can swap the base.
+const GIT_FLAGS = ['-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-c', 'core.attributesFile=/dev/null'];
+const GIT_ENV = { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_NO_REPLACE_OBJECTS: '1', GIT_TERMINAL_PROMPT: '0' };
 
 export const safeGit = (cwd, ...args) => execFileSync('git', [...GIT_FLAGS, ...args], { cwd, encoding: 'utf8', env: { ...process.env, ...GIT_ENV } }).trim();
-
-// A diff that runs no external diff driver and no textconv command from the repository config.
-export const safeDiff = (cwd, ...args) => safeGit(cwd, 'diff', '--no-ext-diff', '--no-textconv', ...args);
-
-export function saveGitState(dir) {
-  return { config: fs.readFileSync(path.join(dir, '.git', 'config')) };
-}
-
-// Puts back the git config from before the run, removes hooks and attributes that the candidate added, and rebuilds
-// the index from the base commit. A clean index also undoes skip-worktree and assume-unchanged flags.
-export function restoreGitState(dir, state, base) {
-  const gitDir = path.join(dir, '.git');
-  const stat = fs.lstatSync(gitDir, { throwIfNoEntry: false });
-  if (!stat || !stat.isDirectory()) throw new Error(`${gitDir} is no longer a directory`);
-  for (const name of ['config', 'hooks', 'info', 'index']) {
-    if (fs.lstatSync(path.join(gitDir, name), { throwIfNoEntry: false })?.isSymbolicLink()) throw new Error(`${gitDir}/${name} is a symlink`);
-  }
-  fs.writeFileSync(path.join(gitDir, 'config'), state.config);
-  fs.rmSync(path.join(gitDir, 'hooks'), { recursive: true, force: true });
-  fs.rmSync(path.join(gitDir, 'info', 'attributes'), { force: true });
-  fs.rmSync(path.join(gitDir, 'index'), { force: true });
-  safeGit(dir, 'read-tree', base);
-}
 
 // A directory under the home cache. Candidates cannot write there: the deny rules block Edit and Write on /Users,
 // and the Bash sandbox writes only to the work dir and the added dirs. The name has a random part.
@@ -41,6 +19,25 @@ export function privateDir(prefix) {
   const cache = path.join(os.homedir(), '.cache');
   fs.mkdirSync(cache, { recursive: true });
   return fs.realpathSync(fs.mkdtempSync(path.join(cache, prefix)));
+}
+
+// The host never runs git in the .git dir of a candidate, because the candidate controls every file in it: config,
+// commondir, alternates, and hooks. The host keeps its own git dir under the home cache, with the work dir as its
+// work tree. trackWorkDir runs before the candidate starts, so the base commit holds the clean tree.
+export function trackWorkDir(dir) {
+  const gitDir = privateDir('hidkit-eval-git-');
+  const git = (...args) => safeGit(dir, `--git-dir=${gitDir}`, `--work-tree=${dir}`, ...args);
+  git('init', '-q');
+  git('add', '-A');
+  git('-c', 'user.email=dev@example.com', '-c', 'user.name=dev', 'commit', '-q', '-m', 'base');
+  return { gitDir, base: git('rev-parse', 'HEAD') };
+}
+
+// The diff of the work dir against the base, staged in the host git dir. No external diff and no textconv run.
+export function trackedDiff(dir, { gitDir, base }, ...args) {
+  const git = (...more) => safeGit(dir, `--git-dir=${gitDir}`, `--work-tree=${dir}`, ...more);
+  git('add', '-A');
+  return git('diff', '--no-ext-diff', '--no-textconv', '--cached', base, ...args);
 }
 
 // Maps each path under dir to a hash of its content. A symlink hashes its target text, so the hash never follows it.
@@ -64,4 +61,49 @@ export function treeManifest(dir, skip = []) {
 export function changedPaths(before, after) {
   const keys = new Set([...before.keys(), ...after.keys()]);
   return [...keys].filter((k) => before.get(k) !== after.get(k)).sort();
+}
+
+// Edit and Write work only inside the work dir. The bare tool names allow a write to any path that no deny rule
+// covers, such as a CLAUDE.md in the temp dir, which each later candidate and judge would load.
+export const scopeWriteTools = (allowed, dir) => allowed.map((t) => (t === 'Edit' || t === 'Write' ? `${t}(/${dir}/**)` : t));
+
+// Claude Code loads CLAUDE.md files from each parent dir. A candidate that plants one injects text into each later
+// run whose cwd is below it. Call this before each candidate and judge run, with the cwd of that run.
+const MEMORY_FILES = ['CLAUDE.md', 'CLAUDE.local.md', '.claude'];
+
+export function plantedMemory(dir) {
+  const found = [];
+  for (let d = path.dirname(dir); ; d = path.dirname(d)) {
+    for (const name of MEMORY_FILES) if (fs.existsSync(path.join(d, name))) found.push(path.join(d, name));
+    if (d === path.dirname(d)) return found;
+  }
+}
+
+// Secrets that code under test has no reason to read.
+const SECRET_DIRS = ['.ssh', '.aws', '.gnupg', '.config/gh', '.netrc', '.claude', '.claude-eval', '.npmrc', '.docker', '.kube'];
+const quote = (p) => JSON.stringify(p);
+
+// A macOS sandbox profile for code that a candidate wrote: no network, writes only to the given dirs, and no reads of
+// the secret dirs in the home dir.
+export function sandboxProfile(writable, home = os.homedir()) {
+  return ['(version 1)', '(allow default)', '(deny network*)', '(deny file-write*)',
+    `(allow file-write* ${writable.map((d) => `(subpath ${quote(d)})`).join(' ')} (literal "/dev/null") (literal "/dev/tty") (regex #"^/dev/fd/"))`,
+    `(deny file-read* ${SECRET_DIRS.map((d) => `(subpath ${quote(path.join(home, d))})`).join(' ')})`].join('\n');
+}
+
+// Runs node with code that a candidate wrote, such as its tests or the modules that a grader imports. It fails closed:
+// on a system without sandbox-exec it refuses to run.
+export function sandboxedNode(args, { cwd, env = process.env, writable = [], timeout, maxBuffer = 64 * 1024 * 1024 }) {
+  if (process.platform !== 'darwin' || !fs.existsSync('/usr/bin/sandbox-exec')) {
+    throw new Error('code from a candidate runs only under sandbox-exec, which this system lacks');
+  }
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'grade-')));
+  try {
+    const dirs = [...writable.map((d) => (fs.existsSync(d) ? fs.realpathSync(d) : d)), tmp];
+    return spawnSync('/usr/bin/sandbox-exec', ['-p', sandboxProfile(dirs), process.execPath, ...args], {
+      cwd, encoding: 'utf8', maxBuffer, timeout, killSignal: 'SIGKILL', env: { ...env, TMPDIR: tmp },
+    });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 }

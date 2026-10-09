@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { PLUGIN_ENTRIES } from './harness.mjs';
+import { scopeWriteTools } from './isolation.mjs';
 
 export const SKILL_ARMS = ['with_skill', 'without_skill'];
 
@@ -74,11 +75,7 @@ export function attemptedEdits(events, dir) {
     .map((f) => path.relative(dir, f)))];
 }
 
-// Edit and Write work only inside the work dir. The bare tool names would allow a write to any path that no deny rule
-// covers, such as the temp dir of a later run.
-export function candidateTools(allowed, dir) {
-  return [...allowed.map((t) => (t === 'Edit' || t === 'Write' ? `${t}(/${dir}/**)` : t)), 'Skill'];
-}
+export const candidateTools = (allowed, dir) => [...scopeWriteTools(allowed, dir), 'Skill'];
 
 // The candidate settings of config.json, with each extra dir added to the sandbox denyRead list and the Read deny rules.
 export function candidateSettings(base, denied) {

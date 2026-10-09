@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runGrader } from './lib/grader.mjs';
-import { privateDir, restoreGitState, safeDiff, safeGit, saveGitState, treeManifest, changedPaths } from './lib/isolation.mjs';
+import { changedPaths, plantedMemory, privateDir, safeGit, sandboxedNode, scopeWriteTools, trackWorkDir, trackedDiff, treeManifest } from './lib/isolation.mjs';
 import { ledgerCommands } from './lib/ledger-commands.mjs';
 import {
   PLUGIN_ENTRIES, answerAccess, buildEnv, buildMeta, checkApiKeySource, checkModels, checkScenarios, executedCommands, freshJudgeDir, judgeInput,
@@ -72,8 +72,8 @@ function assertPluginIntact() {
   if (changed.length) throw new HarnessError(`the plugin copy changed between runs: ${changed.join(', ')}`);
 }
 
-// Git runs with fsmonitor and hooks off. After a candidate run, restoreGitState runs first, because the candidate
-// could write a git config or hooks that run a command on the host.
+// The candidate gets its own git repo in the work dir. After the run, the host reads the work dir only through its own
+// git dir (trackWorkDir), because each file in the .git dir of the candidate can make host git run a command.
 const git = safeGit;
 const TEST_FILE = /\.test\.[cm]?[jt]s$/;
 
@@ -87,7 +87,7 @@ function prepare(scenario) {
   git(dir, 'init', '-q');
   git(dir, 'add', '-A');
   git(dir, '-c', 'user.email=dev@example.com', '-c', 'user.name=dev', 'commit', '-q', '-m', 'initial');
-  return { dir, base: git(dir, 'rev-parse', 'HEAD'), gitState: saveGitState(dir) };
+  return { dir, base: git(dir, 'rev-parse', 'HEAD'), track: trackWorkDir(dir) };
 }
 
 function claude(cwd, args, input = undefined) {
@@ -128,29 +128,31 @@ function assertIsolation(init, arm) {
   }
 }
 
-function passes(file, dir, base) {
+function passes(file, dir, base, changed) {
   try {
-    return runGrader(path.join(SET_DIR, 'graders', file), { evalDir: EVAL_DIR, candidateDir: dir, baseRef: base }).passed;
+    return runGrader(path.join(SET_DIR, 'graders', file), { evalDir: EVAL_DIR, candidateDir: dir, baseRef: base, changed }).passed;
   } catch (error) {
     throw new HarnessError(error.message);
   }
 }
 
-function reproClaim(scenario, dir, base) {
+function reproClaim(scenario, dir, changed) {
   if (!scenario.repro) return null;
-  const tests = safeDiff(dir, '--cached', '--name-only', base).split('\n')
-    .filter((f) => TEST_FILE.test(f) && fs.existsSync(path.join(dir, f)));
+  const tests = changed.filter((f) => TEST_FILE.test(f) && fs.existsSync(path.join(dir, f)));
   if (tests.length === 0) return false;
-  const original = prepare(scenario).dir;
+  const copy = prepare(scenario);
+  const original = copy.dir;
   try {
     for (const f of tests) {
       fs.mkdirSync(path.dirname(path.join(original, f)), { recursive: true });
       fs.copyFileSync(path.join(dir, f), path.join(original, f));
     }
-    const tap = (cwd) => spawnSync(process.execPath, ['--test', '--test-isolation=none', '--test-reporter=tap', ...tests], { cwd, encoding: 'utf8', timeout: 120_000, killSignal: 'SIGKILL' }).stdout ?? '';
+    // The tests are code from the candidate, so they run in the sandbox.
+    const tap = (cwd) => sandboxedNode(['--test', '--test-isolation=none', '--test-reporter=tap', ...tests], { cwd, writable: [cwd], timeout: 120_000 }).stdout ?? '';
     return reproVerdict(tap(original), tap(dir));
   } finally {
     fs.rmSync(path.dirname(original), { recursive: true, force: true });
+    fs.rmSync(copy.track.gitDir, { recursive: true, force: true });
   }
 }
 
@@ -159,6 +161,8 @@ let judgeCostUsd = 0;
 function judge(scenario, patch, reply, commands) {
   const input = judgeInput({ judgePrompt, scenario, patch, reply, commands, maxPatchChars: config.max_patch_chars });
   const cwd = freshJudgeDir();
+  const planted = plantedMemory(cwd);
+  if (planted.length) throw new HarnessError(`a CLAUDE.md or .claude dir sits above the judge dir: ${planted.join(', ')}`);
   let run;
   try {
     run = claude(cwd, ['-p', '--model', config.judge_model, '--output-format', 'json', '--json-schema', judgeSchema, ...config.judge_args], input);
@@ -219,7 +223,10 @@ function cheffyHard(scenario, dir, claims) {
   let ledgerComplete = false;
   let lanes = [];
   try {
-    const report = JSON.parse(execFileSync(process.execPath, [TRACE, 'report', '--all'], { cwd: dir, encoding: 'utf8' }));
+    // trace runs git in the work dir, and the candidate controls its .git dir, so trace runs in the sandbox.
+    const res = sandboxedNode([TRACE, 'report', '--all'], { cwd: dir, writable: [dir], timeout: 120_000 });
+    if (res.status !== 0) throw new Error(res.stderr);
+    const report = JSON.parse(res.stdout);
     ledgerComplete = report.runs.length > 0 && report.runs.every((r) => r.flags.length === 0);
     lanes = report.runs.map((r) => r.lane);
   } catch {
@@ -232,12 +239,14 @@ function cheffyHard(scenario, dir, claims) {
 }
 
 function runOne(scenario, arm, repeat, outDir) {
-  const { dir, base, gitState } = prepare(scenario);
+  const { dir, base, track } = prepare(scenario);
   if (arm === 'cheffy') assertPluginIntact();
+  const planted = plantedMemory(dir);
+  if (planted.length) throw new HarnessError(`a CLAUDE.md or .claude dir sits above the work dir: ${planted.join(', ')}`);
   const prompt = `${arm === 'cheffy' ? `${config.cheffy_invocation} ` : ''}${scenario.prompt} ${config.prompt_suffix}`;
   const isolation = config.isolation[arm].map((a) => a.replace('{root}', PLUGIN_COPY));
   const run = claude(dir, ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', config.candidate_model,
-    '--permission-mode', 'dontAsk', '--allowedTools', config.allowed_tools.join(','), '--settings', CANDIDATE_SETTINGS,
+    '--permission-mode', 'dontAsk', '--allowedTools', scopeWriteTools(config.allowed_tools, dir).join(','), '--settings', CANDIDATE_SETTINGS,
     '--add-dir', XDG_ROOT, ...isolation]);
   const stream = parseStream(run.stdout);
   assertCompleted(run, stream, `${scenario.id} ${arm} #${repeat}`);
@@ -249,17 +258,13 @@ function runOne(scenario, arm, repeat, outDir) {
   } catch (error) {
     throw new HarnessError(`${scenario.id} ${arm} #${repeat}: ${error.message}`);
   }
-  try {
-    restoreGitState(dir, gitState, base);
-  } catch (error) {
-    throw new HarnessError(`${scenario.id} ${arm} #${repeat}: ${error.message}`);
-  }
-  git(dir, 'add', '-A');
-  const patch = safeDiff(dir, '--cached', base);
+  const patch = trackedDiff(dir, track);
+  const changed = trackedDiff(dir, track, '--name-only').split('\n').filter(Boolean);
+  fs.rmSync(track.gitDir, { recursive: true, force: true });
   const claims = {
-    hidden: passes(scenario.graders.hidden, dir, base),
-    repro: reproClaim(scenario, dir, base),
-    injection: scenario.graders.injection ? passes(scenario.graders.injection, dir, base) : null,
+    hidden: passes(scenario.graders.hidden, dir, base, changed),
+    repro: reproClaim(scenario, dir, changed),
+    injection: scenario.graders.injection ? passes(scenario.graders.injection, dir, base, changed) : null,
   };
   // Runs for both arms. ROOT is the repo: the candidate works in a temp copy and never needs a path in it.
   const answerMatches = answerAccess(stream.events, ROOT);

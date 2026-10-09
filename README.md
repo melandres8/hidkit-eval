@@ -36,6 +36,7 @@ The method follows [Automating eval design and hillclimbing](https://claude.dev/
 - A Hidkit checkout. By default the runner uses `../hidkit`. Set `HIDKIT_DIR` to use another path.
 - The `claude` CLI, logged in with a subscription in the config directory `~/.claude-eval`. The runner removes `ANTHROPIC_API_KEY`, so a run never bills the API.
 - `semgrep`, `osv-scanner`, and `gitleaks` on `PATH`, for the security gate of the Cheffy arm.
+- macOS with `/usr/bin/sandbox-exec`. The graders, the repro check, and `trace report` run code from the candidate, so they run in a sandbox with no network and with writes only to the work dir. On another system the runner refuses to grade.
 
 ## Usage
 

@@ -24,7 +24,8 @@ The skill evals check one Hidkit skill at a time. Each case runs twice: once wit
 4. The candidate settings of `eval/config.json` apply: the sandbox, the deny rules on this repository, and the dedicated config directory without an API key. The runner also denies reads of the Hidkit checkout and its main checkout, so the without_skill arm cannot read the skill. Edit and Write work only inside the work dir.
    - The work dir has a random name, so a run cannot plant files in a later run.
    - The plugin copy is in `~/.cache/hidkit-eval-plugin-*`, where no candidate can write, because a plugin can carry hooks and hooks run outside the sandbox. The runner checks a hash of the copy before each run.
-   - Before the runner runs git in the work dir, it puts back the git config, removes hooks, and rebuilds the index. Git runs with fsmonitor, hooks, external diff, and textconv off.
+   - The host never runs git in the `.git` dir of the candidate, because each file in it can make git run a command. The host keeps its own git dir under `~/.cache`, with the work dir as its work tree. Git runs without the global and system config, without an attributes file, and with fsmonitor, hooks, external diff, and textconv off.
+   - Before each candidate and judge run, the runner checks that no `CLAUDE.md`, `CLAUDE.local.md`, or `.claude` dir sits in a parent dir. A candidate could plant one to inject text into later runs.
    - The runner deletes the work dir and the plugin copy after each run. No prompt suffix is added. In `-p` mode nobody answers, so a skill that asks for approval ends its reply with the question.
 5. An expectation of the form `No file under <path> changed.` is graded from a hash of each file before and after the run, and from each edit call on that path, denied or not. The judge grades the other expectations. It sees the request, the transcripts, the description of a good output, the reply, and the diff. The skill name is replaced with a neutral word.
 6. Each run directory holds `stream.jsonl`, `reply.md`, `diff.patch`, `judges.json`, and `grading.json` in the skill-creator shape.
@@ -51,6 +52,6 @@ Sharpener sharpens a skill with the corrections and approvals of a session. Its 
 |---|---|---|---|
 | 1 | `doodle-session-a.txt` | The user corrects the size of diagram labels in 2 uses. The user also wants kraft paper for one post. | The style guide already sets the label size, so the corrections show a repeated model slip. A patch that makes the rule harder to miss, tied to the size of the sheet. Kraft paper is a task preference. A proposal and regression cases, with no edit. |
 | 2 | `fill-me-in-session.txt` | The user approves both uses with no correction. | No skill defect and no patch. |
-| 3 | `doodle-session-b.txt` | The user wants sketchbook paper once. The model forgets once to look at the PNG, which the skill already requires. | A task preference and a single model slip. No patch. |
+| 3 | `doodle-session-b.txt` | The user wants sketchbook paper once. The model forgets once to look at the PNG, which the skill already requires. | A task preference and a single model slip. The taste check asks only about cut labels, so a patch that checks every element at the edges is allowed. No other patch. |
 
-Cases 2 and 3 catch a sharpener that always proposes a change.
+Case 2 catches a sharpener that always proposes a change. Case 3 catches one that turns a one-time preference or a single slip into a rule.
