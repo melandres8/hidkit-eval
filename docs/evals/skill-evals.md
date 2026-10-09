@@ -21,8 +21,12 @@ The skill evals check one Hidkit skill at a time. Each case runs twice: once wit
 1. The runner copies the plugin entries of the Hidkit checkout into a new directory. It leaves out each `skills/*/evals` directory. The without_skill arm also leaves out `skills/<skill>`.
 2. It copies the files of the case into `transcripts/` in that directory, and commits the directory as the base.
 3. It starts `claude -p` in that directory, with a second copy as the plugin. Claude Code denies each edit inside a loaded plugin directory, so one shared directory would block every edit. The with_skill arm starts the prompt with `/hidkit:<skill>`.
-4. The candidate settings of `eval/config.json` apply: the sandbox, the deny rules on this repository, and the dedicated config directory without an API key. No prompt suffix is added. In `-p` mode nobody answers, so a skill that asks for approval ends its reply with the question.
-5. An expectation of the form `No file under <path> changed.` is graded from `git diff` and from each edit call on that path, denied or not. The judge grades the other expectations. It sees the request, the transcripts, the description of a good output, the reply, and the diff. The skill name is replaced with a neutral word.
+4. The candidate settings of `eval/config.json` apply: the sandbox, the deny rules on this repository, and the dedicated config directory without an API key. The runner also denies reads of the Hidkit checkout and its main checkout, so the without_skill arm cannot read the skill. Edit and Write work only inside the work dir.
+   - The work dir has a random name, so a run cannot plant files in a later run.
+   - The plugin copy is in `~/.cache/hidkit-eval-plugin-*`, where no candidate can write, because a plugin can carry hooks and hooks run outside the sandbox. The runner checks a hash of the copy before each run.
+   - Before the runner runs git in the work dir, it puts back the git config, removes hooks, and rebuilds the index. Git runs with fsmonitor, hooks, external diff, and textconv off.
+   - The runner deletes the work dir and the plugin copy after each run. No prompt suffix is added. In `-p` mode nobody answers, so a skill that asks for approval ends its reply with the question.
+5. An expectation of the form `No file under <path> changed.` is graded from a hash of each file before and after the run, and from each edit call on that path, denied or not. The judge grades the other expectations. It sees the request, the transcripts, the description of a good output, the reply, and the diff. The skill name is replaced with a neutral word.
 6. Each run directory holds `stream.jsonl`, `reply.md`, `diff.patch`, `judges.json`, and `grading.json` in the skill-creator shape.
 
 ## Usage

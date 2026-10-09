@@ -38,3 +38,22 @@ Both arms fail the expectation "the cropped mug is a model slip, and the skill a
 
 - **Pilot (14-50-40).** Case 1 assumed that doodle sets no label size. `style.md` sets about 2.5 percent of the viewBox width. Sharpener found the rule and called the corrections a repeated model slip, which its own rules allow to patch. Case 1 now accepts a skill defect or a repeated model slip. The fix came from the skill text, not from the candidate score.
 - **First full run (14-51-57), not valid.** The work dir was also the plugin dir, and Claude Code denies each edit inside a loaded plugin dir. So no arm could edit, and "No file under skills/doodle changed" passed for free. The runner now uses two copies and also counts denied edit calls. A check run (14-57-10) showed that the without_skill arm can edit again.
+
+## Run after the security fixes
+
+A security review of the runner found that a candidate could plant plugin hooks for a later run, and could make host git run a command. The fixes are in [skill-evals.md](skill-evals.md). After them, the full run gave this result.
+
+Results directory: `eval/results/skills-sharpener-2026-10-09T17-50-43-262Z`.
+
+| Case | with_skill | without_skill |
+|---|---|---|
+| 1 | 6/6 | 1/6 |
+| 2 | 3/3 | 1/3 |
+| 3 | 4/4 | 2/4 |
+| Total | 13/13 | 4/13 |
+
+- The scoped Edit permission works: the without_skill arm of case 3 edited `skills/doodle` with the Edit tool.
+- The without_skill arm of case 1 edited the files through Bash, with no Edit call. The file hash found the edit. A check that read only edit calls or the git index would have missed it.
+- In case 3, sharpener again reported the edge crop as a skill defect, as in the earlier runs. This time the judge passed the expectation, because the reply also called the skipped look a single model slip. The same output got a different grade, so the open point on case 3 stays: the expectation is not clear enough.
+- A smoke run of the measurement runner (`v2`, `json-flag`, both arms, no judge, `eval/results/v2-2026-10-09T17-53-40-292Z`) passed the hidden test in both arms. The Cheffy arm loaded the plugin from `~/.cache/hidkit-eval-plugin-*`, and its ledger was complete.
+- No plugin copy stayed in `~/.cache` after the runs.

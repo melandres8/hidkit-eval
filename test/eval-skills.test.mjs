@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  attemptedEdits, candidatePrompt, checkVerdict, gradePaths, mergeJudges, parseSkillOptions, skillIsolation, skillJudgeInput, splitExpectations, stageRunDir, summarize,
+  attemptedEdits, candidatePrompt, candidateSettings, candidateTools, checkVerdict, gradePaths, mergeJudges, parseSkillOptions, skillIsolation, skillJudgeInput, splitExpectations, stageRunDir, summarize,
 } from '../eval/lib/skills.mjs';
 
 test('options need a skill and accept only known arms and positive counts', () => {
@@ -91,4 +91,12 @@ test('attempted edits count each edit call inside the work dir, denied or not', 
   const events = [use('Edit', { file_path: '/w/skills/doodle/SKILL.md' }), use('Write', { file_path: '/w/skills/doodle/SKILL.md' }),
     use('Write', { file_path: '/tmp/x.md' }), use('Read', { file_path: '/w/a.md' }), { message: { content: 'text' } }];
   assert.deepEqual(attemptedEdits(events, '/w'), ['skills/doodle/SKILL.md']);
+});
+
+test('edit and write are scoped to the work dir, and the denied dirs reach both deny lists', () => {
+  assert.deepEqual(candidateTools(['Read', 'Edit', 'Write', 'Bash(git *)'], '/tmp/w'), ['Read', 'Edit(//tmp/w/**)', 'Write(//tmp/w/**)', 'Bash(git *)', 'Skill']);
+  const base = { permissions: { deny: ['Read(/{repo}/**)'] }, sandbox: { filesystem: { denyRead: ['{repo}'] } } };
+  const s = candidateSettings(base, ['/r', '/h', '/r']);
+  assert.deepEqual(s.permissions.deny, ['Read(//r/**)', 'Read(//h/**)']);
+  assert.deepEqual(s.sandbox.filesystem.denyRead, ['/r', '/h']);
 });

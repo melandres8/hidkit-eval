@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runGrader } from './lib/grader.mjs';
+import { privateDir, restoreGitState, safeDiff, safeGit, saveGitState, treeManifest, changedPaths } from './lib/isolation.mjs';
 import { ledgerCommands } from './lib/ledger-commands.mjs';
 import {
   PLUGIN_ENTRIES, answerAccess, buildEnv, buildMeta, checkApiKeySource, checkModels, checkScenarios, executedCommands, freshJudgeDir, judgeInput,
@@ -43,10 +44,14 @@ const CLAUDE_ENV = buildEnv(process.env, CONFIG_DIR, os.homedir());
 // prompt, so neither arm is handicapped by the allowlist. Writes stay in the work dir and temp, Bash cannot read the repo
 // (graders and references), there is no network, and a command never falls back to running unsandboxed.
 const CANDIDATE_SETTINGS = JSON.stringify(config.candidate_settings).replaceAll('{repo}', JSON.stringify(ROOT).slice(1, -1));
-// One temp root holds work dirs, the plugin copy, and repro copies, apart from earlier evals.
+// One temp root holds work dirs and repro copies, apart from earlier evals.
 // The prefix is neutral: the candidate sees this path, and it must not show that the task is measured.
 const EVAL_ROOT = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-')));
-const PLUGIN_COPY = path.join(EVAL_ROOT, 'plugin');
+// The plugin copy is outside the temp root, where no candidate can write. A plugin can carry hooks, and hooks run
+// outside the sandbox, so a candidate that edits the copy could run code on the host in a later run.
+const PLUGIN_COPY = privateDir('hidkit-eval-plugin-');
+process.on('exit', () => fs.rmSync(PLUGIN_COPY, { recursive: true, force: true }));
+let pluginManifest = null;
 // The Edit/Write deny rules on /Users also block sandboxed writes there, so semgrep cannot write ~/.semgrep.
 // Both arms get config and cache homes in one dir that --add-dir opens to sandboxed writes.
 const XDG_ROOT = path.join(EVAL_ROOT, 'xdg');
@@ -56,26 +61,33 @@ for (const [key, dir] of [['XDG_CONFIG_HOME', 'config'], ['XDG_CACHE_HOME', 'cac
 }
 // The Cheffy arm gets a copy without graders, fixtures, references, or results.
 function stagePlugin() {
-  fs.mkdirSync(PLUGIN_COPY, { recursive: true });
   for (const name of PLUGIN_ENTRIES) {
     fs.cpSync(path.join(HIDKIT, name), path.join(PLUGIN_COPY, name), { recursive: true });
   }
+  pluginManifest = treeManifest(PLUGIN_COPY);
 }
-let counter = 0;
 
-const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+function assertPluginIntact() {
+  const changed = changedPaths(pluginManifest, treeManifest(PLUGIN_COPY));
+  if (changed.length) throw new HarnessError(`the plugin copy changed between runs: ${changed.join(', ')}`);
+}
+
+// Git runs with fsmonitor and hooks off. After a candidate run, restoreGitState runs first, because the candidate
+// could write a git config or hooks that run a command on the host.
+const git = safeGit;
 const TEST_FILE = /\.test\.[cm]?[jt]s$/;
 
 class HarnessError extends Error {}
 
+// The work dir name has a random part, so a candidate cannot plant files in the work dir of a later run.
 function prepare(scenario) {
-  const dir = path.join(path.join(EVAL_ROOT, `work-${counter += 1}`), scenario.project);
+  const dir = path.join(fs.mkdtempSync(path.join(EVAL_ROOT, 'work-')), scenario.project);
   fs.cpSync(path.join(SET_DIR, 'fixtures', scenario.fixture), dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'hidkit.config.yaml'), `tiers:\n  strong: ${config.candidate_model}\n  fast: ${config.candidate_model}\n`);
   git(dir, 'init', '-q');
   git(dir, 'add', '-A');
   git(dir, '-c', 'user.email=dev@example.com', '-c', 'user.name=dev', 'commit', '-q', '-m', 'initial');
-  return { dir, base: git(dir, 'rev-parse', 'HEAD') };
+  return { dir, base: git(dir, 'rev-parse', 'HEAD'), gitState: saveGitState(dir) };
 }
 
 function claude(cwd, args, input = undefined) {
@@ -126,7 +138,7 @@ function passes(file, dir, base) {
 
 function reproClaim(scenario, dir, base) {
   if (!scenario.repro) return null;
-  const tests = git(dir, 'diff', '--cached', '--name-only', base).split('\n')
+  const tests = safeDiff(dir, '--cached', '--name-only', base).split('\n')
     .filter((f) => TEST_FILE.test(f) && fs.existsSync(path.join(dir, f)));
   if (tests.length === 0) return false;
   const original = prepare(scenario).dir;
@@ -220,7 +232,8 @@ function cheffyHard(scenario, dir, claims) {
 }
 
 function runOne(scenario, arm, repeat, outDir) {
-  const { dir, base } = prepare(scenario);
+  const { dir, base, gitState } = prepare(scenario);
+  if (arm === 'cheffy') assertPluginIntact();
   const prompt = `${arm === 'cheffy' ? `${config.cheffy_invocation} ` : ''}${scenario.prompt} ${config.prompt_suffix}`;
   const isolation = config.isolation[arm].map((a) => a.replace('{root}', PLUGIN_COPY));
   const run = claude(dir, ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', config.candidate_model,
@@ -236,8 +249,13 @@ function runOne(scenario, arm, repeat, outDir) {
   } catch (error) {
     throw new HarnessError(`${scenario.id} ${arm} #${repeat}: ${error.message}`);
   }
+  try {
+    restoreGitState(dir, gitState, base);
+  } catch (error) {
+    throw new HarnessError(`${scenario.id} ${arm} #${repeat}: ${error.message}`);
+  }
   git(dir, 'add', '-A');
-  const patch = git(dir, 'diff', '--cached', base);
+  const patch = safeDiff(dir, '--cached', base);
   const claims = {
     hidden: passes(scenario.graders.hidden, dir, base),
     repro: reproClaim(scenario, dir, base),

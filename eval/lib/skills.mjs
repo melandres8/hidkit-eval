@@ -74,6 +74,22 @@ export function attemptedEdits(events, dir) {
     .map((f) => path.relative(dir, f)))];
 }
 
+// Edit and Write work only inside the work dir. The bare tool names would allow a write to any path that no deny rule
+// covers, such as the temp dir of a later run.
+export function candidateTools(allowed, dir) {
+  return [...allowed.map((t) => (t === 'Edit' || t === 'Write' ? `${t}(/${dir}/**)` : t)), 'Skill'];
+}
+
+// The candidate settings of config.json, with each extra dir added to the sandbox denyRead list and the Read deny rules.
+export function candidateSettings(base, denied) {
+  const dirs = [...new Set(denied)];
+  const fill = (text) => text.replaceAll('{repo}', dirs[0]);
+  const settings = JSON.parse(fill(JSON.stringify(base)));
+  settings.permissions.deny = [...new Set([...settings.permissions.deny, ...dirs.map((d) => `Read(/${d}/**)`)])];
+  settings.sandbox.filesystem.denyRead = [...new Set([...settings.sandbox.filesystem.denyRead, ...dirs])];
+  return settings;
+}
+
 export const candidatePrompt = (skill, arm, prompt) => (arm === 'with_skill' ? `/hidkit:${skill} ${prompt}` : prompt);
 
 // The with_skill arm must load the skill and the without_skill arm must not.

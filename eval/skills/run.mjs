@@ -2,14 +2,15 @@
 // Runs the evals of one Hidkit skill: each case with the skill and without it, then grades each expectation.
 // Usage: node eval/skills/run.mjs --skill <name> [--eval <id>] [--arms with_skill,without_skill] [--repeats n] [--judge-repeats n] [--dry-run]
 // The cases are in eval/skills/<name>/evals.json, in the skill-creator schema. The output follows its grading.json shape.
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { answerAccess, buildEnv, checkApiKeySource, checkModels, freshJudgeDir } from '../lib/harness.mjs';
+import { changedPaths, privateDir, restoreGitState, safeDiff, safeGit, saveGitState, treeManifest } from '../lib/isolation.mjs';
 import {
-  attemptedEdits, candidatePrompt, checkVerdict, gradePaths, mergeJudges, parseSkillOptions, skillIsolation, skillJudgeInput, splitExpectations, stageRunDir, summarize,
+  attemptedEdits, candidateSettings, candidateTools, candidatePrompt, checkVerdict, gradePaths, mergeJudges, parseSkillOptions, skillIsolation, skillJudgeInput, splitExpectations, stageRunDir, summarize,
 } from '../lib/skills.mjs';
 
 const SKILLS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -42,7 +43,10 @@ const judgePrompt = fs.readFileSync(path.join(SKILLS_DIR, 'judge-prompt.md'), 'u
 const judgeSchema = fs.readFileSync(path.join(SKILLS_DIR, 'judge-schema.json'), 'utf8');
 const CONFIG_DIR = config.config_dir.replace(/^~(?=$|\/)/, os.homedir());
 const CLAUDE_ENV = buildEnv(process.env, CONFIG_DIR, os.homedir());
-const CANDIDATE_SETTINGS = JSON.stringify(config.candidate_settings).replaceAll('{repo}', JSON.stringify(ROOT).slice(1, -1));
+// The candidate cannot read the Hidkit checkout, its main checkout when it is a worktree, or this repository.
+// Otherwise the without_skill arm could read the skill under measurement.
+const HIDKIT_MAIN = path.dirname(safeGit(HIDKIT, 'rev-parse', '--path-format=absolute', '--git-common-dir'));
+const CANDIDATE_SETTINGS = JSON.stringify(candidateSettings(config.candidate_settings, [ROOT, HIDKIT, HIDKIT_MAIN]));
 // The candidate sees this path, so the prefix is neutral.
 const EVAL_ROOT = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-')));
 const XDG_ROOT = path.join(EVAL_ROOT, 'xdg');
@@ -50,33 +54,42 @@ for (const [key, dir] of [['XDG_CONFIG_HOME', 'config'], ['XDG_CACHE_HOME', 'cac
   CLAUDE_ENV[key] = path.join(XDG_ROOT, dir);
   fs.mkdirSync(CLAUDE_ENV[key], { recursive: true });
 }
-const ALLOWED_TOOLS = [...config.allowed_tools, 'Skill'];
 
 class HarnessError extends Error {}
-const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
-let counter = 0;
+const git = safeGit;
 
 // The work dir and the plugin dir are two copies. Claude Code denies each edit inside a loaded plugin dir, so a candidate
 // that shares them can never edit, and the diff check passes for free. The work dir is the copy that the candidate edits.
+// The work dir has a random name, so no candidate can plant files in a later run. The plugin dir is under the home
+// cache, where no candidate can write, because a plugin can carry hooks and hooks run outside the sandbox.
 function prepare(testCase, arm) {
-  const root = path.join(EVAL_ROOT, `work-${counter += 1}`);
+  const root = fs.mkdtempSync(path.join(EVAL_ROOT, 'work-'));
   const dir = path.join(root, 'hidkit');
-  const pluginDir = path.join(root, 'plugin');
+  const pluginDir = privateDir('hidkit-eval-plugin-');
   stageRunDir({ hidkit: HIDKIT, dest: dir, skill: options.skill, arm, files: testCase.files ?? [], setDir: SET_DIR });
   stageRunDir({ hidkit: HIDKIT, dest: pluginDir, skill: options.skill, arm, files: [], setDir: SET_DIR });
   git(dir, 'init', '-q');
   git(dir, 'add', '-A');
   git(dir, '-c', 'user.email=dev@example.com', '-c', 'user.name=dev', 'commit', '-q', '-m', 'initial');
-  return { dir, pluginDir, base: git(dir, 'rev-parse', 'HEAD') };
+  return {
+    root, dir, pluginDir, base: git(dir, 'rev-parse', 'HEAD'), gitState: saveGitState(dir),
+    pluginManifest: treeManifest(pluginDir), workManifest: treeManifest(dir, ['.git']),
+  };
 }
+
+const cleanup = (run) => {
+  fs.rmSync(run.root, { recursive: true, force: true });
+  fs.rmSync(run.pluginDir, { recursive: true, force: true });
+};
+process.on('exit', () => fs.rmSync(EVAL_ROOT, { recursive: true, force: true }));
 
 function claude(cwd, args, input = undefined) {
   const res = spawnSync('claude', args, { cwd, input, encoding: 'utf8', timeout: config.timeout_ms, maxBuffer: 256 * 1024 * 1024, env: CLAUDE_ENV });
   return { code: res.status, stdout: res.stdout ?? '', error: res.error?.message ?? null };
 }
 
-const candidateArgs = (pluginDir, prompt) => ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', config.candidate_model,
-  '--permission-mode', 'dontAsk', '--allowedTools', ALLOWED_TOOLS.join(','), '--settings', CANDIDATE_SETTINGS,
+const candidateArgs = (dir, pluginDir, prompt) => ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', config.candidate_model,
+  '--permission-mode', 'dontAsk', '--allowedTools', candidateTools(config.allowed_tools, dir).join(','), '--settings', CANDIDATE_SETTINGS,
   '--add-dir', XDG_ROOT, '--strict-mcp-config', '--plugin-dir', pluginDir];
 
 function parseStream(stdout) {
@@ -114,9 +127,19 @@ function judge(input, judged) {
 }
 
 function runOne(testCase, arm, repeat, outDir) {
+  const run = prepare(testCase, arm);
+  try {
+    return gradeRun(testCase, arm, repeat, outDir, run);
+  } finally {
+    cleanup(run);
+  }
+}
+
+function gradeRun(testCase, arm, repeat, outDir, { dir, pluginDir, base, gitState, pluginManifest, workManifest }) {
   const label = `eval-${testCase.id} ${arm} #${repeat}`;
-  const { dir, pluginDir, base } = prepare(testCase, arm);
-  const run = claude(dir, candidateArgs(pluginDir, candidatePrompt(options.skill, arm, testCase.prompt)));
+  const pluginChanged = changedPaths(pluginManifest, treeManifest(pluginDir));
+  if (pluginChanged.length) throw new HarnessError(`${label}: the plugin copy changed before the run: ${pluginChanged.join(', ')}`);
+  const run = claude(dir, candidateArgs(dir, pluginDir, candidatePrompt(options.skill, arm, testCase.prompt)));
   const stream = parseStream(run.stdout);
   if (run.code !== 0 || !stream.result || stream.result.is_error) throw new HarnessError(`${label} did not complete: ${stream.result?.result ?? run.error ?? `exit ${run.code}`}`);
   const isolation = skillIsolation(stream.init, options.skill, arm, config.forbidden_markers);
@@ -124,12 +147,14 @@ function runOne(testCase, arm, repeat, outDir) {
   try {
     checkApiKeySource(stream.init);
     checkModels(stream.result.modelUsage, config.candidate_model);
+    restoreGitState(dir, gitState, base);
   } catch (error) {
     throw new HarnessError(`${label}: ${error.message}`);
   }
+  // The changed files come from a hash of each file, not from git, so a candidate cannot hide an edit in the index.
+  const changed = changedPaths(workManifest, treeManifest(dir, ['.git']));
   git(dir, 'add', '-A');
-  const patch = git(dir, 'diff', '--cached', base);
-  const changed = git(dir, 'diff', '--cached', '--name-only', base).split('\n').filter(Boolean);
+  const patch = safeDiff(dir, '--cached', base);
   const reply = stream.result.result ?? '';
   const { paths, judged } = splitExpectations(testCase.expectations);
   const transcripts = (testCase.files ?? []).map((f) => ({ name: path.basename(f), text: fs.readFileSync(path.join(SET_DIR, f), 'utf8') }));
@@ -158,11 +183,14 @@ function runOne(testCase, arm, repeat, outDir) {
 const plan = cases.flatMap((c) => options.arms.flatMap((arm) => Array.from({ length: options.repeats }, (_, repeat) => ({ c, arm, repeat }))));
 if (options.dryRun) {
   for (const { c, arm } of plan) {
-    const { dir, pluginDir } = prepare(c, arm);
+    const run = prepare(c, arm);
     const { paths, judged } = splitExpectations(c.expectations);
-    console.log(JSON.stringify({ eval: c.id, arm, dir, args: candidateArgs(pluginDir, candidatePrompt(options.skill, arm, c.prompt)).filter((a) => a !== CANDIDATE_SETTINGS),
-      skills: fs.readdirSync(path.join(dir, 'skills')), transcripts: fs.readdirSync(path.join(dir, 'transcripts')), judged: judged.length, by_diff: paths.length }));
+    console.log(JSON.stringify({ eval: c.id, arm, dir: run.dir, plugin: run.pluginDir,
+      args: candidateArgs(run.dir, run.pluginDir, candidatePrompt(options.skill, arm, c.prompt)).filter((a) => a !== CANDIDATE_SETTINGS),
+      skills: fs.readdirSync(path.join(run.dir, 'skills')), transcripts: fs.readdirSync(path.join(run.dir, 'transcripts')), judged: judged.length, by_diff: paths.length }));
+    cleanup(run);
   }
+  console.log(`settings: ${CANDIDATE_SETTINGS}`);
   console.log(`dry run: ${plan.length} candidate runs, ${plan.length * options.judgeRepeats} judge runs. Work dirs in ${EVAL_ROOT}`);
   process.exit(0);
 }
