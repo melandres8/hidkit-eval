@@ -8,10 +8,8 @@ import { sandboxedNode } from './isolation.mjs';
 // A grader that hits it counts as a failure of the candidate, not as a harness error.
 // changed lists the files that the candidate changed, from the host git dir, one per line in CHANGED_FILES.
 export function runGrader(graderPath, { evalDir, candidateDir, baseRef = '', changed = [], timeoutMs = 300_000 }) {
-  // A parent node --test sets NODE_TEST_CONTEXT, which would switch the child away from TAP output.
-  const { NODE_TEST_CONTEXT, ...env } = process.env;
   const res = sandboxedNode(['--test', '--test-isolation=none', '--test-reporter=tap', graderPath], {
-    cwd: evalDir, env: { ...env, CANDIDATE_DIR: candidateDir, BASE_REF: baseRef, CHANGED_FILES: changed.join('\n') }, writable: [candidateDir], timeout: timeoutMs,
+    cwd: evalDir, env: { CANDIDATE_DIR: candidateDir, BASE_REF: baseRef, CHANGED_FILES: changed.join('\n') }, writable: [candidateDir], timeout: timeoutMs,
   });
   if (res.error?.code === 'ETIMEDOUT') {
     return { passed: false, timedOut: true, results: tapResults(res.stdout ?? ''), tap: res.stdout ?? '', stderr: res.stderr ?? '' };

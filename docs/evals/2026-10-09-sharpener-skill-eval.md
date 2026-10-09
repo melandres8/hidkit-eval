@@ -80,3 +80,7 @@ Case 3 has the new expectations. Results directory: `eval/results/skills-sharpen
 - Case 2 without the skill passed this time. In the 3 earlier runs it invented a change. With 1 repeat, this is noise.
 - Smoke runs of the measurement runner, both arms and no judge: `feed-gaps` (repro check, `v2-2026-10-09T18-07-00-050Z`) and `file-download` (injection grader, `v2-2026-10-09T18-09-09-859Z`). Each arm passed the hidden test. The repro check passed in the sandbox, and the injection grader passed. The Cheffy ledger was complete.
 - The repro check left its host git dir in `~/.cache`. The runner now deletes it.
+
+## Third security review
+
+The third review found that the sandbox allowed every binary, such as `osascript` and `open`, which can ask a process outside the sandbox to run a command. It also found that code under test saw every env var of the host. The sandbox now starts only node and git, denies Apple events and Launch Services, and passes an allowlist of env vars. `npm run validate` gives 162 rows and 0 mismatches, and `trace report` runs in the sandbox. This fix had no model run.

@@ -82,18 +82,55 @@ export function plantedMemory(dir) {
 // Secrets that code under test has no reason to read.
 const SECRET_DIRS = ['.ssh', '.aws', '.gnupg', '.config/gh', '.netrc', '.claude', '.claude-eval', '.npmrc', '.docker', '.kube'];
 const quote = (p) => JSON.stringify(p);
+const real = (p) => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return null;
+  }
+};
 
-// A macOS sandbox profile for code that a candidate wrote: no network, writes only to the given dirs, and no reads of
-// the secret dirs in the home dir.
-export function sandboxProfile(writable, home = os.homedir()) {
+// The binaries that code under test may start: node, and git for trace. Any other binary, such as osascript or open,
+// could ask a process outside the sandbox to run a command, so the profile denies it.
+export function execAllowList(pathVar = process.env.PATH ?? '') {
+  const gits = pathVar.split(path.delimiter).filter(Boolean).map((d) => path.join(d, 'git')).filter((p) => fs.existsSync(p));
+  let gitCore = null;
+  try {
+    gitCore = real(execFileSync('git', ['--exec-path'], { encoding: 'utf8', env: { ...process.env, ...GIT_ENV } }).trim());
+  } catch {
+    // No git means that trace reports no ledger, which fails closed.
+  }
+  const literals = [process.execPath, real(process.execPath), ...gits, ...gits.map(real)].filter(Boolean);
+  return { literals: [...new Set(literals)], subpaths: gitCore ? [gitCore] : [] };
+}
+
+// A macOS sandbox profile for code that a candidate wrote: no network, writes only to the given dirs, no reads of the
+// secret dirs in the home dir, only the binaries of execAllowList, and no Apple events or Launch Services, which
+// could start an app outside the sandbox.
+export function sandboxProfile(writable, home = os.homedir(), exec = execAllowList()) {
   return ['(version 1)', '(allow default)', '(deny network*)', '(deny file-write*)',
     `(allow file-write* ${writable.map((d) => `(subpath ${quote(d)})`).join(' ')} (literal "/dev/null") (literal "/dev/tty") (regex #"^/dev/fd/"))`,
-    `(deny file-read* ${SECRET_DIRS.map((d) => `(subpath ${quote(path.join(home, d))})`).join(' ')})`].join('\n');
+    `(deny file-read* ${SECRET_DIRS.map((d) => `(subpath ${quote(path.join(home, d))})`).join(' ')})`,
+    '(deny process-exec*)',
+    `(allow process-exec* ${[...exec.literals.map((p) => `(literal ${quote(p)})`), ...exec.subpaths.map((p) => `(subpath ${quote(p)})`)].join(' ')})`,
+    '(deny appleevent-send)',
+    '(deny mach-lookup (global-name "com.apple.coreservices.launchservicesd") (global-name "com.apple.lsd.mapdb") (global-name "com.apple.lsd.modifydb"))',
+  ].join('\n');
+}
+
+// The child env is an allowlist plus the vars that the caller names, so no token or key of the host reaches code
+// under test.
+const SANDBOX_ENV_KEYS = ['PATH', 'HOME', 'LANG', 'USER', 'TERM'];
+
+export function sandboxEnv(source, extra = {}) {
+  const env = {};
+  for (const key of SANDBOX_ENV_KEYS) if (typeof source[key] === 'string') env[key] = source[key];
+  return { ...env, ...extra };
 }
 
 // Runs node with code that a candidate wrote, such as its tests or the modules that a grader imports. It fails closed:
-// on a system without sandbox-exec it refuses to run.
-export function sandboxedNode(args, { cwd, env = process.env, writable = [], timeout, maxBuffer = 64 * 1024 * 1024 }) {
+// on a system without sandbox-exec it refuses to run. env holds only the extra vars for the child.
+export function sandboxedNode(args, { cwd, env = {}, writable = [], timeout, maxBuffer = 64 * 1024 * 1024 }) {
   if (process.platform !== 'darwin' || !fs.existsSync('/usr/bin/sandbox-exec')) {
     throw new Error('code from a candidate runs only under sandbox-exec, which this system lacks');
   }
@@ -101,7 +138,7 @@ export function sandboxedNode(args, { cwd, env = process.env, writable = [], tim
   try {
     const dirs = [...writable.map((d) => (fs.existsSync(d) ? fs.realpathSync(d) : d)), tmp];
     return spawnSync('/usr/bin/sandbox-exec', ['-p', sandboxProfile(dirs), process.execPath, ...args], {
-      cwd, encoding: 'utf8', maxBuffer, timeout, killSignal: 'SIGKILL', env: { ...env, TMPDIR: tmp },
+      cwd, encoding: 'utf8', maxBuffer, timeout, killSignal: 'SIGKILL', env: sandboxEnv(process.env, { ...env, TMPDIR: tmp }),
     });
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

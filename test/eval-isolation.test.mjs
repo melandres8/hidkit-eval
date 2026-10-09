@@ -101,7 +101,7 @@ test('sandboxed node can write its own dir, but not elsewhere, not the network, 
     const net = require('node:net').connect(443, '1.1.1.1');
     net.on('connect', () => { out.net = 'ok'; console.log(JSON.stringify(out)); process.exit(0); });
     net.on('error', () => { out.net = 'denied'; console.log(JSON.stringify(out)); process.exit(0); });`;
-  const res = sandboxedNode(['-e', script], { cwd: dir, writable: [dir], timeout: 20_000, env: { ...process.env, HOME: home } });
+  const res = sandboxedNode(['-e', script], { cwd: dir, writable: [dir], timeout: 20_000, env: { HOME: home } });
   // The profile denies reads under the real home, so the test checks the profile text for the fake home as well.
   assert.match(sandboxProfile([dir], home), new RegExp(path.join(home, '.ssh').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   const out = JSON.parse(res.stdout);
@@ -114,4 +114,26 @@ test('sandboxed node denies reads of the secret dirs under the real home', () =>
   const target = path.join(os.homedir(), '.ssh');
   const res = sandboxedNode(['-e', `try { require('node:fs').readdirSync(${JSON.stringify(target)}); console.log('ok'); } catch (e) { console.log(e.code === 'ENOENT' ? 'absent' : 'denied'); }`], { cwd: dir, writable: [dir], timeout: 20_000 });
   assert.ok(['denied', 'absent'].includes(res.stdout.trim()), res.stdout + res.stderr);
+});
+
+test('sandboxed node starts node and git, but no other binary, and sees no host secret in its env', () => {
+  const dir = tmp('sandbox-exec-test-');
+  safeGit(dir, 'init', '-q');
+  process.env.HIDKIT_EVAL_TEST_SECRET = 'leak';
+  try {
+    const script = `
+      const { spawnSync } = require('node:child_process'); const out = {};
+      out.node = spawnSync(process.execPath, ['-e', 'process.exit(0)']).status;
+      out.git = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { encoding: 'utf8' }).stdout.trim();
+      const osa = spawnSync('/usr/bin/osascript', ['-e', 'return 1'], { encoding: 'utf8' });
+      out.osascript = osa.status === 0 ? 'ran' : 'blocked';
+      const open = spawnSync('/usr/bin/open', ['-g', '-a', 'Calculator'], { encoding: 'utf8' });
+      out.open = open.status === 0 ? 'ran' : 'blocked';
+      out.secret = process.env.HIDKIT_EVAL_TEST_SECRET ?? null;
+      console.log(JSON.stringify(out));`;
+    const res = sandboxedNode(['-e', script], { cwd: dir, writable: [dir], timeout: 20_000 });
+    assert.deepEqual(JSON.parse(res.stdout), { node: 0, git: 'true', osascript: 'blocked', open: 'blocked', secret: null }, res.stderr);
+  } finally {
+    delete process.env.HIDKIT_EVAL_TEST_SECRET;
+  }
 });
