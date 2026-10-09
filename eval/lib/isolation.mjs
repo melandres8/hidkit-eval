@@ -105,8 +105,8 @@ export function execAllowList(pathVar = process.env.PATH ?? '') {
 }
 
 // A macOS sandbox profile for code that a candidate wrote: no network, writes only to the given dirs, no reads of the
-// secret dirs in the home dir, only the binaries of execAllowList, and no Apple events or Launch Services, which
-// could start an app outside the sandbox.
+// secret dirs in the home dir, and only the binaries of execAllowList. It denies every mach service, Apple event, and
+// distributed notification, because a service outside the sandbox could run a command for the caller.
 export function sandboxProfile(writable, home = os.homedir(), exec = execAllowList()) {
   return ['(version 1)', '(allow default)', '(deny network*)', '(deny file-write*)',
     `(allow file-write* ${writable.map((d) => `(subpath ${quote(d)})`).join(' ')} (literal "/dev/null") (literal "/dev/tty") (regex #"^/dev/fd/"))`,
@@ -114,7 +114,7 @@ export function sandboxProfile(writable, home = os.homedir(), exec = execAllowLi
     '(deny process-exec*)',
     `(allow process-exec* ${[...exec.literals.map((p) => `(literal ${quote(p)})`), ...exec.subpaths.map((p) => `(subpath ${quote(p)})`)].join(' ')})`,
     '(deny appleevent-send)',
-    '(deny mach-lookup (global-name "com.apple.coreservices.launchservicesd") (global-name "com.apple.lsd.mapdb") (global-name "com.apple.lsd.modifydb"))',
+    '(deny mach-lookup)', '(deny mach-register)', '(deny ipc-posix-shm-write-create)', '(deny distributed-notification-post)',
   ].join('\n');
 }
 

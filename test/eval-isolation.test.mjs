@@ -137,3 +137,13 @@ test('sandboxed node starts node and git, but no other binary, and sees no host 
     delete process.env.HIDKIT_EVAL_TEST_SECRET;
   }
 });
+
+test('git in the sandbox cannot start a shell through an alias, and the profile denies every mach service', () => {
+  const dir = tmp('sandbox-git-test-');
+  safeGit(dir, 'init', '-q');
+  const marker = path.join(dir, 'pwned');
+  const script = `const r = require('node:child_process').spawnSync('git', ['-c', 'alias.x=!touch ${marker}', 'x'], { encoding: 'utf8' }); console.log(r.status);`;
+  sandboxedNode(['-e', script], { cwd: dir, writable: [dir], timeout: 20_000 });
+  assert.equal(fs.existsSync(marker), false);
+  assert.match(sandboxProfile([dir]), /\(deny mach-lookup\)\n/);
+});
