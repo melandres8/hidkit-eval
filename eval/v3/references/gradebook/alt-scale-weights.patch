@@ -1,0 +1,30 @@
+diff --git a/src/grades/categories.mjs b/src/grades/categories.mjs
+index 1996ca2..0fe3a2f 100644
+--- a/src/grades/categories.mjs
++++ b/src/grades/categories.mjs
+@@ -1,12 +1,19 @@
+ import { conflict } from '../http/errors.mjs';
+ 
+-// The points and the maximum of each category of a term, for one student.
++// The points and the maximum of each category that counts, for one student, with its weight scaled
++// so that the weights of the categories that count sum to 100. See docs/grading.md.
+ export function categoryTotals(term, student) {
+-  return term.categories.map(({ name, weight }) => {
++  const counted = term.categories.map(({ name, weight }) => {
+     const scores = student.scores.filter((s) => s.category === name);
+     if (scores.length === 0) throw conflict(`no score yet in ${name}`);
+-    const points = scores.reduce((sum, s) => sum + s.points, 0);
+-    const max = scores.reduce((sum, s) => sum + s.max, 0);
+-    return { name, weight, points, max };
+-  });
++    return { name, weight, scores: scores.filter((s) => !s.excused) };
++  }).filter((c) => c.scores.length > 0);
++  if (counted.length === 0) throw conflict('every score is excused');
++  const weights = counted.reduce((sum, c) => sum + c.weight, 0);
++  return counted.map(({ name, weight, scores }) => ({
++    name,
++    weight: (weight * 100) / weights,
++    points: scores.reduce((sum, s) => sum + s.points, 0),
++    max: scores.reduce((sum, s) => sum + s.max, 0),
++  }));
+ }

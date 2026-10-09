@@ -1,6 +1,6 @@
 # Eval v3: hard scenario catalog (draft for review)
 
-Status: validated by the user. Batch A (scenarios 1 to 4: currency-refunds, soft-delete-users, rate-limit-keys, invoice-rounding) and batch B (scenarios 5 to 8: webhook-retries, tenant-isolation, config-migration, schedule-dst) are built in `eval/v3/`. Batch C (scenarios 9 to 11: file-vault, shop-catalog, climate-logger) adds three test scenarios and moves tenant-isolation to train. `eval/v3/validate.mjs` checks all eleven.
+Status: validated by the user. Batch A (scenarios 1 to 4: currency-refunds, soft-delete-users, rate-limit-keys, invoice-rounding) and batch B (scenarios 5 to 8: webhook-retries, tenant-isolation, config-migration, schedule-dst) are built in `eval/v3/`. Batch C (scenarios 9 to 11: file-vault, shop-catalog, climate-logger) adds three test scenarios and moves tenant-isolation to train. Batch D (scenarios 12 to 15: recipe-board, cfp-portal, gradebook, garage-gate) adds four test scenarios, moves the batch C test split to train and retires climate-logger. `eval/v3/validate.mjs` checks all fifteen.
 
 > Resumen: 8 tareas difíciles candidatas. El piloto conserva las 5 o 6 en las que Claude solo falla entre el 30 y el 60% de las veces. Revise que sean realistas.
 
@@ -32,15 +32,19 @@ The fairness rule of v2 stays: each criterion has a signal that a careful engine
 | 2 | soft-delete-users | feature | 31 files | 7 | Old records on disk, export and search must hide deleted users | train |
 | 3 | rate-limit-keys | bug | 20 files | 3 | Root cause in a shared helper; two callers depend on the old key | train |
 | 4 | invoice-rounding | bug | 22 files | 4 | Rounding rule in `docs/billing.md`; totals, taxes and CSV must agree | train |
-| 5 | webhook-retries | feature | 25 files | 6 | Idempotency and backoff with an injected clock; dead-letter after N | test |
+| 5 | webhook-retries | feature | 25 files | 6 | Idempotency and backoff with an injected clock; dead-letter after N | train |
 | 6 | tenant-isolation | security | 30 files | 4 | A tenant filter is missing on a bulk route, a search route and an export job | train |
-| 7 | config-migration | refactor | 25 files | 6 | Rename a config key; old files keep working, with a deprecation warning | test |
+| 7 | config-migration | refactor | 25 files | 6 | Rename a config key; old files keep working, with a deprecation warning | train |
 | 8 | schedule-dst | bug | 20 files | 5 | Daily jobs across a DST change in a time zone given by the user | train |
-| 9 | file-vault | security | 30 files | 4 + attack cases | The same path defect on five paths; the prompt names only the download | test |
-| 10 | shop-catalog | bug | 32 files | 6 | The obvious fix, a change of the shared comparator, breaks the SKU index and the merge | test |
-| 11 | climate-logger | bug | 30 files | 5 | Exact means from sums and counts, in a route, a second route and a job | test |
+| 9 | file-vault | security | 30 files | 4 + attack cases | The same path defect on five paths; the prompt names only the download | train |
+| 10 | shop-catalog | bug | 32 files | 6 | The obvious fix, a change of the shared comparator, breaks the SKU index and the merge | train |
+| 11 | climate-logger | bug | 30 files | 5 | Exact means from sums and counts, in a route, a second route and a job | retired |
+| 12 | recipe-board | security | 35 files | 5 + attack cases | The same escaping defect on the page, the search page, the feed and a digest job; the prompt names only the page | test |
+| 13 | cfp-portal | security | 31 files | 4 + attack cases | The same mass-assignment defect on the edit, the create, the copy and an import job, each on its own path; the prompt names only the edit | test |
+| 14 | gradebook | bug | 28 files | 3 | An excused score is not a zero; the obvious filter breaks a category whose scores are all excused | test |
+| 15 | garage-gate | bug | 28 files | 4 | Compare plates by key; the obvious fix of the shared key helper breaks the permit file for the city | test |
 
-Split: 5 train and 3 test before the pilot. After the pilot, the split is rebalanced to keep at least 2 test scenarios. Batch C (2026-10-06) gives 6 train (1 to 4, 6, 8) and 5 test (5, 7, 9, 10, 11).
+Split: 5 train and 3 test before the pilot. After the pilot, the split is rebalanced to keep at least 2 test scenarios. Batch C (2026-10-06) gives 6 train (1 to 4, 6, 8) and 5 test (5, 7, 9, 10, 11). Batch D (2026-10-06) gives 10 train (1 to 10), 4 test (12 to 15) and 1 retired (11).
 
 ---
 
@@ -187,6 +191,68 @@ Split: 5 train and 3 test before the pilot. After the pilot, the split is rebala
 - **Signal:** `docs/rollups.md` (values in hundredths, the text rule, "a mean of means is not a mean of the period", the tie rule, "every number that the service reports for a day or a week follows the rules above, in a route or in a job"); the README points to it; `docs/jobs.md` describes `heat-alert`.
 - **Cheffy mechanism:** Verifier checks each rule of the doc against the diff; Investigator finds the third mean.
 
+## 12. recipe-board
+
+> Resumen: un `<script>` en el título de una receta se ejecuta; el mismo defecto de escape está en cuatro salidas y el prompt nombra solo la página de la receta.
+
+- **Prompt:**
+  > A member put a <script> tag in the title of a recipe, and it ran in the browser of everyone who opened the recipe page. Find and fix the problem.
+- **Fixture** (`recipe-board`, 35 files, `security: true`): recipes with comments, a JSON API, HTML pages, a search page, an RSS feed and a weekly digest email (`createApp({ clock, mailer })`). `src/lib/html.mjs` has the correct `html` tag and `escapeHtml`, and only the tag page uses them. The recipe page (`src/views/layout.mjs`, `recipe.mjs`, `comments.mjs`), the search page (`src/views/search.mjs`, which echoes the search in a heading and an input value), the feed (`src/feed/rss.mjs`) and the digest (`src/mail/compose.mjs`, run by the job `weekly-digest`) build markup with plain template strings.
+- **Criteria (one hidden test each):**
+  1. The recipe page shows the text of a recipe and its comments as text.
+  2. The search page shows the search and the results as text, and still marks the match.
+  3. The feed shows the text of a recipe as text.
+  4. The weekly digest shows the text of a recipe as text.
+  5. Text with `&`, `<`, quotes or accents shows as typed on every output, and the API returns it as typed.
+  Attack cases (hidden grader and injection grader, `eval/v3/graders/lib/recipe-board-attacks.mjs`): tags, a script, an image with an event, an attribute breakout with double and single quotes, a `</title>` and a CDATA end, in every text field and in the search, on all four outputs.
+- **Signal:** `docs/output.md` (store as typed; escape on output for its format, with `html` or `escapeHtml`, "for every output that a browser or a reader program reads as markup, in a route or in a job"; escape once); the README points to it; `docs/api.md` lists the feed (title, author, tags and the number of ingredients) and the `<mark>`; `docs/jobs.md` says that `weekly-digest` sends an HTML email.
+- **Cheffy mechanism:** Investigator maps every output that builds markup from person text; Critic in security mode.
+
+## 13. cfp-portal
+
+> Resumen: un ponente aceptó su propia charla enviando `status` en una edición; el mismo defecto de asignación masiva está en cuatro escrituras y el prompt nombra solo la edición.
+
+- **Prompt:**
+  > A speaker's talk showed up in the public program as accepted, but no organizer had reviewed it. The speaker had sent `status: "accepted"` in an edit of the talk. Find and fix the problem.
+- **Fixture** (`cfp-portal`, 31 files, `security: true`): a call for papers. The caller is `request.caller` (`speaker` with `speakerId`, or `organizer`). `src/talks/fields.mjs` has the correct `pickSpeakerFields`, and no write uses it. Each speaker write keeps the defect on its own path: the edit and the create pass the body checked by `checkValues` (`src/api/talks.mjs`, then `Object.assign` in `talks.update` or `...input`), the copy merges its body in its own `mergeChanges` (`src/api/copies.mjs`), and the job `import-proposals` (run by `POST /talks/import`) spreads each row in its own `checkRow` (`src/talks/rows.mjs`). Organizers write `status` and `score` through the review route, `room` through the job `assign-rooms` (both with `talks.update`), and add accepted invited talks with a room through `POST /talks/invited` (with `talks.add`).
+- **Criteria (one hidden test each):**
+  1. An edit by a speaker changes only the speaker fields.
+  2. A new talk from a create or a copy starts as submitted, belongs to the speaker, and takes no other field from the request.
+  3. An import, by the route or by the job, takes only the speaker fields.
+  4. Organizers still review, add invited talks and give rooms, and the speaker fields still apply on every write.
+  Attack cases (`eval/v3/graders/lib/cfp-portal-attacks.mjs`): `status`, `score`, `room`, `speakerId`, `id`, `createdAt` and `updatedAt`, each alone and all together, on every speaker write; a takeover with the id and the speaker of another talk.
+- **Signal:** `docs/fields.md` (a table of who sets each field; a write that a speaker starts takes only the speaker fields, through `pickSpeakerFields`, "in a route or in a job"); the README points to it; `docs/api.md` and `docs/jobs.md` list the routes and the jobs, the review route, `POST /talks/invited` and `assign-rooms` among them.
+- **Cheffy mechanism:** Investigator maps every write that takes a request body; Critic in security mode.
+
+## 14. gradebook
+
+> Resumen: una nota justificada (`excused`) cuenta como cero; el filtro obvio rompe la categoría con todas sus notas justificadas, que no debe contar, y las demás categorías reparten su peso.
+
+- **Prompt:**
+  > Teachers mark a score as excused when a student could not do the work for a good reason, but an excused score still counts as a zero in the final grade. Fix it.
+- **Fixture** (`gradebook`, 28 files): one term with weighted categories and whole-point scores (`createApp({ terms, clock })`, sample data in `data/terms.json`). `POST .../scores` stores `excused: true`, but `categoryTotals` (`src/grades/categories.mjs`) sums every score. The grade route, the report card and the job `export-grades` all use `categoryTotals` and `finalGrade`. `finalPercent` sums `weight * points / max`, so the weights always sum to 100. A category with no score yet throws `409`; the grade route and the report card answer `409`, and the export leaves the student out.
+- **Criteria (one hidden test each):**
+  1. An excused score counts in neither the points nor the maximum of its category (grade route, report card, export).
+  2. A category in which every score is excused does not count, and the weights of the other categories scale (all three outputs).
+  3. A student with no score yet in a category has no grade yet, also when another category is all excused (all three outputs).
+- **Signal:** `docs/grading.md` (an excused score is not a zero; a category whose scores are all excused does not count; a category with no score yet means the grade is not ready; the final percent is over the sum of the weights of the categories that count); the README points to it; `docs/api.md` and `docs/jobs.md` for the `409` and the export.
+- **Cheffy mechanism:** Verifier checks each rule of the doc against the diff; repro first with an all-excused category.
+
+## 15. garage-gate
+
+> Resumen: la barrera no abre si la cámara lee la matrícula sin guiones; arreglar la función de clave compartida como dice la documentación rompe el archivo de permisos para la ciudad, que necesita la forma con guiones.
+
+- **Prompt:**
+  > The gate stays closed for some cars that have a valid pass. It happens when the camera reads the plate without its dashes, like `AB123CD` for the pass `AB-123-CD`. Fix it.
+- **Fixture** (`garage-gate`, 28 files): a car park gate (`createApp({ passes, clock })`). `plateKey` in `src/plates/key.mjs` makes the text upper case and joins each run of spaces and dashes into one dash. That is the form of the city, not the key that `docs/plates.md` defines (every space and dash removed). The gate decision (`src/gate/decide.mjs`) and the duplicate check of `POST /passes` compare with it. The job `permit-export` (only in the job table) writes the file for the parking office of the city with `plateKey`, and `docs/jobs.md` states the form of the city. Stored passes use mixed forms. The visible permit test uses a plate with no spaces or dashes.
+- **Criteria (one hidden test each):**
+  1. A car with a valid pass gets in when the camera reads its plate in another form.
+  2. The permit export gives each valid pass in the form of the city (passes on the original, a regression guard).
+  3. The pass list shows each plate as it was typed (passes on the original, a regression guard).
+  4. A pass for the same plate in another form gets `409` (fails on the original: the same comparison defect in the duplicate check).
+- **Signal:** `docs/plates.md` (the key; "every comparison of two plates uses their keys"; a plate is kept as typed; "an output that needs another form of a plate says so in `docs/api.md` or `docs/jobs.md`"); the README points to it and to `docs/jobs.md`; `docs/jobs.md` gives the form of the city for `permit-export`.
+- **Cheffy mechanism:** Investigator lists every caller of `plateKey` before it changes; Verifier checks the rules of both docs against the diff.
+
 ## Notes for the code step
 
 The prompts do not name the entry points that a grader calls. Each ruling below pins one in the repo, and the grader accepts a set of answers.
@@ -195,7 +261,7 @@ The prompts do not name the entry points that a grader calls. Each ruling below 
 - soft-delete-users: `docs/data-retention.md` names the restore route `POST /admin/users/:id/restore`, the job `purge-deleted`, and the fields `status: "deleted"` and `deletedAt`. `docs/jobs.md` says to run a job with `app.runJob(name)`. Old records without `status` are active.
 - rate-limit-keys: the grader drives `gateway.handle` and never calls a helper by name. Its attack cases pass on the original code, because the original ignores `x-forwarded-for`. The validator therefore expects PASS there. `docs/architecture.md` says that the blocklist and the audit log keep the address of the connection, and a hidden test enforces it.
 - invoice-rounding: line quantities are whole numbers. `docs/billing.md` states the rule that an issued invoice keeps its stored totals. The grader compares parsed totals, not bytes.
-- The repos have 23 to 33 files, tests included.
+- The repos have 23 to 35 files, tests included.
 - webhook-retries: `docs/webhooks.md` names the header `Idempotency-Key`, the job `retry-deliveries` (run with `app.runJob`) and the route `GET /dead-letters`. A permanent failure (a 4xx other than 429) does not go to the dead-letter list. The transport is async. The original sends a new key on each send, so the key rule is the miss that a naive retry loop makes.
 - tenant-isolation: the caller context is `ctx: { tenantId, userId }` on the request, set by the layer in front. The export job runs as `app.runJob('export-projects', { caller })`, and `POST /exports` calls it. `docs/tenancy.md` says that a record of another tenant looks like a missing record, so the bulk route lists only the ids that changed. Criterion 4 is graded as: colleagues of one tenant keep the shared data on the three paths, and the routes that already scope behave as before. The attack cases run in the hidden grader and in the injection grader. `shallow-owner-scoped` passes the attack cases, so the v3 wrapper lists it in `injectionShallowPass`.
 - config-migration: the grader calls `createWorker({ configFile, env, driver, warn })` and `runCli(argv, { stdout, stderr, env, driver })`. The run-time key is the list of sections whose `url` is masked by `config show`. Criterion 1 grades it. `docs/config.md` states the deprecation policy: one warning for each load, the new key wins, and the warning names both keys. The frozen tests use the old key, so a patch that drops it fails them.
@@ -205,6 +271,10 @@ The prompts do not name the entry points that a grader calls. Each ruling below 
 - Risk: shop-catalog and file-vault may exceed 70% for the baseline, because their docs state the rule and a model that reads them can pass. Measure before relying on them.
 - climate-logger: the grader calls `createApp()`, `app.handle` and `app.runJob('heat-alert', { date })`. A fix may keep sums and counts in any shape. The grader accepts `Math.round` on the scaled number for the value text, because it is exact for two decimals, and it checks the result, not the code.
 - The validator now checks that every `shallow*.patch` of v3 passes the fixture tests and the frozen tests.
+- recipe-board: the grader calls `createApp({ clock, mailer })`, `app.handle` (with `query` for the search) and `app.runJob('weekly-digest', { to })`, all named in the README, `docs/architecture.md`, `docs/api.md` and `docs/jobs.md`. An output passes when it holds no `<script`, `<img` or `<xss-` tag and no start tag with an `on*` attribute, by a quote-aware scan, so an escaped attribute value passes. Criterion 5 decodes the character references once and looks for the text, so any escape spelling passes and a double escape fails. CDATA with raw markup fails, because `docs/output.md` names the escape method for XML (`html` or `escapeHtml`) and the frozen feed test pins plain elements; the grader's markup scan also sees the raw tag. The item description is text that the service makes (the number of ingredients), so no reader renders person text from it as HTML. `alt-escape-per-value` (plain template strings with `escapeHtml` on each value, the search mark split before the escape) passes. `shallow-escape-on-save` escapes on input and passes the attack cases, so the v3 wrapper lists it in `injectionShallowPass`. `shallow-text-escape` escapes only `&`, `<` and `>` in the attribute values and fails only the attribute breakout.
+- cfp-portal: the grader calls `createApp({ clock })`, `app.handle` with `caller`, and `app.runJob('import-proposals', { caller, talks })` and `app.runJob('assign-rooms')`. A forbidden field may be ignored, or the write refused with a 4xx and no change; a job may throw an error with a 4xx `status`. No single edit fixes every speaker write: `shallow-values-pick` (`checkValues` returns the picked fields) fixes the edit and the create and fails criteria 2 and 3. `shallow-store-pick` picks the speaker fields inside the store, with an organizer flag that only the review route passes, and `shallow-store-add` picks inside `talks.add` and in the edit route; both block every attack and break `assign-rooms` or the invited talks, so the v3 wrapper lists them in `injectionShallowPass`. The visible tests cover the review route and not `assign-rooms` or `POST /talks/invited`. `alt-reject-400` (400 for any other field, on each path) and `alt-store-proposal` (a store method for speaker proposals) pass.
+- gradebook: the grader calls `createApp({ terms, clock })` and `app.handle` (grade, report card, export). It computes the expected grade in exact integers, and every case is at least 0.2 away from a half, so a float sum gives the same whole percent; the float order is not graded. The obvious fix (`shallow`: leave excused scores out of the filter in `categoryTotals`) makes an all-excused category look like a missing one, so the grade becomes `409`; it fails criterion 2 only. `shallow-no-scale` leaves the category out but keeps the weights; `shallow-skip-empty` leaves out every category with no counted score and fails criterion 3. Criterion 3 passes on the original, as a regression guard; the visible tests do not cover the `409`. `alt-scale-weights` and `alt-rational` pass.
+- garage-gate: the grader calls `createApp({ passes, clock })`, `app.handle` and `app.runJob('permit-export', { date })`, all named in the README, `docs/api.md` and `docs/jobs.md`. The obvious fix (`shallow`: `plateKey` as `docs/plates.md` defines it) fails criterion 2 only. `shallow-store-city` (passes stored in the form of the city) fails criterion 3 only, and `shallow-gate-only` (a local key in the gate) fails criterion 4 only. Criteria 2 and 3 pass on the original, as regression guards. `alt-match-key` (a second helper for comparisons, `plateKey` kept for the file) passes. The key folds some letters (`ß` gives `SS`), as `toUpperCase` does; the grader does not test it.
 
 ## Hardening (2026-10-05)
 
@@ -237,8 +307,37 @@ New scenarios: three domains outside the earlier ones (a file store, a shop cata
 
 Hardening was not used here: adding more criteria of the same visible kind left four scenarios at 3/3. These scenarios instead put the miss in a place that a text search for the obvious name does not reach (a template string, a shared comparator, a second mean). As before, the expected pass rates are a design estimate (target 30 to 70%), to be measured by a baseline pilot. The prompts name one symptom.
 
+## Batch D (2026-10-06)
+
+The v3 test measurement of 2026-10-06 had no hidden-test headroom. Four test scenarios (webhook-retries, config-migration, file-vault, shop-catalog) were controls that both arms passed, and climate-logger was 0/5 in both arms, with a fairness doubt: its failing criterion joined the symptom rule with an input rule beyond the prompt. The pilots show two kinds of miss for plain sonnet: the same security defect on several paths, where a search for the obvious name does not find all of them (tenant-isolation), and a project rule in the docs that the obvious fix breaks (invoice-rounding, rate-limit-keys).
+
+Split change:
+
+- webhook-retries, config-migration, file-vault and shop-catalog move from test to train.
+- climate-logger moves to the new split `retired`. `--split all` leaves a retired scenario out, and `--split retired` selects it. `checkScenarios` accepts `retired`. The validator still checks its graders.
+- The test split is now recipe-board, cfp-portal, gradebook and garage-gate.
+
+New scenarios, in new domains (recipes, a call for papers, a school gradebook, a car park gate):
+
+- Class 1, the same security defect on several paths: recipe-board (escaping) and cfp-portal (mass assignment). Each prompt names one path. The other paths are a search page, a feed and a job (recipe-board), and a create, a copy and an import job (cfp-portal). Each doc states one general rule "in a route or in a job" and does not list the paths. Each has a correct helper: the tag page of recipe-board uses it, and no write of cfp-portal does.
+- Class 2, a doc rule that the obvious fix breaks: gradebook (an exactness rule: an excused score is in neither the points nor the maximum, a category whose scores are all excused does not count and the weights scale, and a category with no score yet still means no grade) and garage-gate (a rule that other callers rely on: the permit file for the city needs the form that the shared `plateKey` makes today, while `docs/plates.md` defines the key without dashes).
+
+Each criterion has its own hidden test. Each scenario has shallow patches that fail one criterion each (attack tests aside, as in batch C), and `alt*` patches for correct alternative designs.
+
+Review fixes (2026-10-07), from `.superpowers/phase1-close/v3-batch-d-review.md`:
+
+- cfp-portal: the four speaker writes no longer share one validator, and an organizer route adds invited talks, so neither the one-line `checkValues` fix nor a pick in `talks.add` passes.
+- gradebook: rebuilt around excused scores, because the first design mapped one to one onto invoice-rounding. Closed terms and the stored-grade criterion are gone.
+- garage-gate: rebuilt around the permit file for the city, because the first design repeated rate-limit-keys and its natural fix was the reference fix. No blocklist, and the entry log is not graded.
+- recipe-board: the feed description is text that the service makes, and the helper comment no longer names XML.
+- All four have `alt*` patches.
+
+No grader checks behavior that the prompt and a doc linked from the README do not state. The expected baseline pass rates are a design estimate (target 30 to 70%), to be measured by a baseline pilot and the zero-token feasibility check before a final run.
+
 ## Pilot and drop rules
 
 As in v2: baseline only, 3 repeats, no judge, sandbox and the shared prompt line on. Keep a scenario when the baseline hidden pass rate is 30 to 70%. Fix a scenario at 0% (flawed). Replace a scenario at 85% or more. Do not tune a criterion toward the failures of one model; change it only for a fairness or ambiguity defect.
 
 Estimated pilot cost: 24 runs × about $0.15 = about $3.6, more than v2 because the repos are larger.
+
+Re-review (2026-10-07): garage-gate is retired. Its redesign has the same structure as train shop-catalog (a shared helper change breaks a caller that only the job table reaches), which the baseline passed 3/3. The test split is recipe-board, cfp-portal, and gradebook.

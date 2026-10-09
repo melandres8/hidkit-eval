@@ -1,0 +1,63 @@
+diff --git a/src/api/copies.mjs b/src/api/copies.mjs
+index 5710d34..35cc9b3 100644
+--- a/src/api/copies.mjs
++++ b/src/api/copies.mjs
+@@ -1,10 +1,11 @@
++import { pickSpeakerFields } from '../talks/fields.mjs';
+ import { requireSpeaker, visibleTalk } from '../talks/access.mjs';
+ import { checkObject, checkValue } from '../talks/values.mjs';
+ 
+ // The fields of a copy: the fields of the source talk, then the changes in the body.
+ function mergeChanges(source, body) {
+   const { title, abstract, track, level } = source;
+-  const merged = { title, abstract, track, level, ...checkObject(body) };
++  const merged = { title, abstract, track, level, ...pickSpeakerFields(checkObject(body)) };
+   for (const field of ['title', 'abstract', 'track', 'level']) checkValue(field, merged[field]);
+   return merged;
+ }
+diff --git a/src/api/talks.mjs b/src/api/talks.mjs
+index 5f724f4..0cf97b9 100644
+--- a/src/api/talks.mjs
++++ b/src/api/talks.mjs
+@@ -1,5 +1,6 @@
+ import { forbidden } from '../http/errors.mjs';
+ import { requireSpeaker, visibleTalk } from '../talks/access.mjs';
++import { pickSpeakerFields } from '../talks/fields.mjs';
+ import { checkValues } from '../talks/values.mjs';
+ 
+ export const routes = ({ talks }) => [
+@@ -22,7 +23,7 @@ export const routes = ({ talks }) => [
+     method: 'POST', path: '/talks',
+     handle: ({ body, caller }) => {
+       const speaker = requireSpeaker(caller);
+-      const input = checkValues(body, { full: true });
++      const input = pickSpeakerFields(checkValues(body, { full: true }));
+       return { status: 201, body: talks.add({ ...input, speakerId: speaker.speakerId }) };
+     },
+   },
+@@ -31,7 +32,7 @@ export const routes = ({ talks }) => [
+     handle: ({ params, body, caller }) => {
+       requireSpeaker(caller);
+       const talk = visibleTalk(talks, params.id, caller);
+-      return { status: 200, body: talks.update(talk.id, checkValues(body)) };
++      return { status: 200, body: talks.update(talk.id, pickSpeakerFields(checkValues(body))) };
+     },
+   },
+ ];
+diff --git a/src/talks/rows.mjs b/src/talks/rows.mjs
+index d9626ef..5999f37 100644
+--- a/src/talks/rows.mjs
++++ b/src/talks/rows.mjs
+@@ -1,10 +1,11 @@
++import { pickSpeakerFields } from './fields.mjs';
+ import { checkObject, checkValue } from './values.mjs';
+ 
+ // A row of an import comes from a spreadsheet. The title loses the spaces at its ends, and track and level may be in any case.
+ export function checkRow(row) {
+   checkObject(row);
+   const lower = (value) => (typeof value === 'string' ? value.toLowerCase() : value);
+-  const out = { ...row, title: typeof row.title === 'string' ? row.title.trim() : row.title, abstract: row.abstract ?? '', track: lower(row.track), level: lower(row.level) };
++  const out = { ...pickSpeakerFields(row), title: typeof row.title === 'string' ? row.title.trim() : row.title, abstract: row.abstract ?? '', track: lower(row.track), level: lower(row.level) };
+   for (const field of ['title', 'abstract', 'track', 'level']) checkValue(field, out[field]);
+   return out;
+ }

@@ -12,12 +12,15 @@ if (!dir) {
 }
 const config = JSON.parse(fs.readFileSync(new URL('./config.json', import.meta.url), 'utf8'));
 const records = fs.readFileSync(path.join(dir, 'results.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
-const r = evaluate(records, config);
 const metaFile = path.join(dir, 'meta.json');
 const meta = fs.existsSync(metaFile) ? JSON.parse(fs.readFileSync(metaFile, 'utf8')) : null;
+const r = evaluate(records, { ...config, noise_statistic: meta?.noise_statistic ?? null });
 // Older meta files have no set: they predate v2, so the scenario list of the split is not checked.
 let expectedIds = null;
-if (meta?.set) {
+if (Array.isArray(meta?.scenarios)) {
+  // The run recorded its scenario list, so a later split change does not mark its scenarios as missing.
+  expectedIds = meta.scenarios;
+} else if (meta?.set) {
   const all = JSON.parse(fs.readFileSync(path.join(setDir(path.dirname(fileURLToPath(import.meta.url)), meta.set), 'scenarios.json'), 'utf8'));
   expectedIds = selectScenarios(all, { split: meta.split ?? 'all' }).map((s) => s.id);
 }
@@ -27,10 +30,12 @@ const incomplete = problems.filter((p) => !p.startsWith('meta.json'));
 const fixed = (n) => (typeof n === 'number' && Number.isFinite(n) ? n.toFixed(2) : String(n));
 const lines = [
   '# Mini-eval report', '', `Set ${meta?.set ?? 'v1'}, split ${meta?.split ?? 'all'}, node ${meta?.node ?? 'not recorded'}. Runs: ${records.length}.`, '',
-  '| Scenario | Baseline | Cheffy | Noise | Cost ratio |', '|---|---|---|---|---|',
+  '| Scenario | Baseline | Cheffy | Half-range | Cost ratio |', '|---|---|---|---|---|',
   ...r.per_scenario.map((s) => `| ${s.scenario} | ${fixed(s.baseline)} | ${fixed(s.cheffy)} | ${fixed(s.noise)} | ${fixed(s.cost_ratio)} |`),
   '',
-  `Quality gain ${fixed(r.quality_gain)} against noise ${fixed(r.noise)}: ${r.quality_ok ? 'pass' : 'fail'}.`,
+  r.gain_interval
+    ? `Quality gain ${fixed(r.quality_gain)}, ${Math.round(r.gain_interval.confidence * 100)}% bootstrap interval ${fixed(r.gain_interval.low)} to ${fixed(r.gain_interval.high)}; hidden-test gain interval ${fixed(r.hidden_interval?.low)} to ${fixed(r.hidden_interval?.high)}. Both low ends must be above 0: ${r.quality_ok ? 'pass' : 'fail'}. Largest half-range, for reference: ${fixed(r.noise)}.`
+    : `Quality gain ${fixed(r.quality_gain)} against noise (largest half-range) ${fixed(r.noise)}: ${r.quality_ok ? 'pass' : 'fail'}.`,
   `Cost ratio ${fixed(r.cost_ratio)} against ceiling ${config.cost_ceiling}, usage coverage ${r.usage_coverage ? 'complete' : 'incomplete'}: ${r.cost_ok ? 'pass' : 'fail'}.`,
   `Judge agreement ${fixed(r.judge_agreement)} against minimum ${config.min_judge_agreement}: ${r.judge_ok ? 'pass' : 'fail'}.`,
   `Hard failures: ${r.hard_failures.length ? r.hard_failures.join('; ') : 'none'}.`,

@@ -1,0 +1,26 @@
+diff --git a/src/jobs/permit-export.mjs b/src/jobs/permit-export.mjs
+index 5a64022..2934546 100644
+--- a/src/jobs/permit-export.mjs
++++ b/src/jobs/permit-export.mjs
+@@ -1,9 +1,11 @@
+ import { badRequest } from '../http/errors.mjs';
+-import { plateKey } from '../plates/key.mjs';
++
++// The form of a plate that the city reads: upper case, each run of spaces and dashes made into one dash. See docs/jobs.md.
++const cityForm = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '-');
+ 
+ // The file of the day for the parking office of the city: the passes that are valid on the day.
+ export function permitExport({ passes }, { date } = {}) {
+   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw badRequest('bad date');
+-  const lines = passes.all().filter((p) => p.until >= date).map((p) => `${plateKey(p.plate)};${p.until}`);
++  const lines = passes.all().filter((p) => p.until >= date).map((p) => `${cityForm(p.plate)};${p.until}`);
+   return { date, file: `${['plate;until', ...lines].join('\n')}\n` };
+ }
+diff --git a/src/plates/key.mjs b/src/plates/key.mjs
+index dfdc33e..4786677 100644
+--- a/src/plates/key.mjs
++++ b/src/plates/key.mjs
+@@ -1,2 +1,2 @@
+ // The key of a plate. See docs/plates.md.
+-export const plateKey = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '-');
++export const plateKey = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '');

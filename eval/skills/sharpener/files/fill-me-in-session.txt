@@ -1,0 +1,15 @@
+Session transcript. The target skill is fill-me-in (skills/fill-me-in). Lines start with the speaker.
+
+[user] Añade validación de email al formulario de registro en src/signup.js y un test.
+[assistant] (edits src/signup.js, adds test/signup.test.js, runs npm test: 12 pass)
+[user] ponme al tanto
+[assistant] (loads fill-me-in, runs map.mjs and render.mjs, the page opens in the browser)
+[assistant] Idea: el registro rechaza un email sin dominio antes de llamar a la API. Summary: hecho, 12 tests pasan; no necesitas hacer nada. Page: /tmp/scratch/briefing.html
+[user] Perfecto, muy claro.
+
+[user] Ahora mueve la constante MAX_LEN a src/config.js.
+[assistant] (moves the constant, updates two imports, runs npm test: 12 pass)
+[user] qué hiciste?
+[assistant] (loads fill-me-in, runs map.mjs and render.mjs)
+[assistant] Idea: MAX_LEN vive ahora en la configuración compartida. Summary: hecho, 12 tests pasan. Page: /tmp/scratch/briefing-2.html
+[user] Genial, gracias. Así me gusta.

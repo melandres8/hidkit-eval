@@ -1,0 +1,8 @@
+diff --git a/src/plates/key.mjs b/src/plates/key.mjs
+index dfdc33e..4786677 100644
+--- a/src/plates/key.mjs
++++ b/src/plates/key.mjs
+@@ -1,2 +1,2 @@
+ // The key of a plate. See docs/plates.md.
+-export const plateKey = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '-');
++export const plateKey = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '');

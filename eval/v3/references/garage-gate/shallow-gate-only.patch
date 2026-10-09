@@ -1,0 +1,20 @@
+diff --git a/src/gate/decide.mjs b/src/gate/decide.mjs
+index 9a343a8..11730ba 100644
+--- a/src/gate/decide.mjs
++++ b/src/gate/decide.mjs
+@@ -1,10 +1,12 @@
+ import { readPlate } from '../camera/read.mjs';
+-import { plateKey } from '../plates/key.mjs';
++
++// Two plates are the same when they match in upper case, without spaces and dashes.
++const sameForm = (text) => text.trim().toUpperCase().replace(/[\s-]+/g, '');
+ 
+ // Decides if the gate opens for a camera event.
+ export function decide({ passes, clock }, event) {
+-  const key = plateKey(readPlate(event));
++  const key = sameForm(readPlate(event));
+   const today = clock().toISOString().slice(0, 10);
+-  const pass = passes.all().find((p) => plateKey(p.plate) === key && p.until >= today);
++  const pass = passes.all().find((p) => sameForm(p.plate) === key && p.until >= today);
+   return pass ? { open: true, reason: 'pass' } : { open: false, reason: 'no-pass' };
+ }

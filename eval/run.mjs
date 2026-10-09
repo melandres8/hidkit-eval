@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runGrader } from './lib/grader.mjs';
+import { changedPaths, plantedMemory, privateDir, safeGit, sandboxedNode, scopeWriteTools, trackWorkDir, trackedDiff, treeManifest } from './lib/isolation.mjs';
 import { ledgerCommands } from './lib/ledger-commands.mjs';
 import {
   PLUGIN_ENTRIES, answerAccess, buildEnv, buildMeta, checkApiKeySource, checkModels, checkScenarios, executedCommands, freshJudgeDir, judgeInput,
@@ -43,10 +44,14 @@ const CLAUDE_ENV = buildEnv(process.env, CONFIG_DIR, os.homedir());
 // prompt, so neither arm is handicapped by the allowlist. Writes stay in the work dir and temp, Bash cannot read the repo
 // (graders and references), there is no network, and a command never falls back to running unsandboxed.
 const CANDIDATE_SETTINGS = JSON.stringify(config.candidate_settings).replaceAll('{repo}', JSON.stringify(ROOT).slice(1, -1));
-// One temp root holds work dirs, the plugin copy, and repro copies, apart from earlier evals.
+// One temp root holds work dirs and repro copies, apart from earlier evals.
 // The prefix is neutral: the candidate sees this path, and it must not show that the task is measured.
 const EVAL_ROOT = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-')));
-const PLUGIN_COPY = path.join(EVAL_ROOT, 'plugin');
+// The plugin copy is outside the temp root, where no candidate can write. A plugin can carry hooks, and hooks run
+// outside the sandbox, so a candidate that edits the copy could run code on the host in a later run.
+const PLUGIN_COPY = privateDir('hidkit-eval-plugin-');
+process.on('exit', () => fs.rmSync(PLUGIN_COPY, { recursive: true, force: true }));
+let pluginManifest = null;
 // The Edit/Write deny rules on /Users also block sandboxed writes there, so semgrep cannot write ~/.semgrep.
 // Both arms get config and cache homes in one dir that --add-dir opens to sandboxed writes.
 const XDG_ROOT = path.join(EVAL_ROOT, 'xdg');
@@ -56,26 +61,33 @@ for (const [key, dir] of [['XDG_CONFIG_HOME', 'config'], ['XDG_CACHE_HOME', 'cac
 }
 // The Cheffy arm gets a copy without graders, fixtures, references, or results.
 function stagePlugin() {
-  fs.mkdirSync(PLUGIN_COPY, { recursive: true });
   for (const name of PLUGIN_ENTRIES) {
     fs.cpSync(path.join(HIDKIT, name), path.join(PLUGIN_COPY, name), { recursive: true });
   }
+  pluginManifest = treeManifest(PLUGIN_COPY);
 }
-let counter = 0;
 
-const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+function assertPluginIntact() {
+  const changed = changedPaths(pluginManifest, treeManifest(PLUGIN_COPY));
+  if (changed.length) throw new HarnessError(`the plugin copy changed between runs: ${changed.join(', ')}`);
+}
+
+// The candidate gets its own git repo in the work dir. After the run, the host reads the work dir only through its own
+// git dir (trackWorkDir), because each file in the .git dir of the candidate can make host git run a command.
+const git = safeGit;
 const TEST_FILE = /\.test\.[cm]?[jt]s$/;
 
 class HarnessError extends Error {}
 
+// The work dir name has a random part, so a candidate cannot plant files in the work dir of a later run.
 function prepare(scenario) {
-  const dir = path.join(path.join(EVAL_ROOT, `work-${counter += 1}`), scenario.project);
+  const dir = path.join(fs.mkdtempSync(path.join(EVAL_ROOT, 'work-')), scenario.project);
   fs.cpSync(path.join(SET_DIR, 'fixtures', scenario.fixture), dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'hidkit.config.yaml'), `tiers:\n  strong: ${config.candidate_model}\n  fast: ${config.candidate_model}\n`);
   git(dir, 'init', '-q');
   git(dir, 'add', '-A');
   git(dir, '-c', 'user.email=dev@example.com', '-c', 'user.name=dev', 'commit', '-q', '-m', 'initial');
-  return { dir, base: git(dir, 'rev-parse', 'HEAD') };
+  return { dir, base: git(dir, 'rev-parse', 'HEAD'), track: trackWorkDir(dir) };
 }
 
 function claude(cwd, args, input = undefined) {
@@ -116,29 +128,31 @@ function assertIsolation(init, arm) {
   }
 }
 
-function passes(file, dir, base) {
+function passes(file, dir, base, changed) {
   try {
-    return runGrader(path.join(SET_DIR, 'graders', file), { evalDir: EVAL_DIR, candidateDir: dir, baseRef: base }).passed;
+    return runGrader(path.join(SET_DIR, 'graders', file), { evalDir: EVAL_DIR, candidateDir: dir, baseRef: base, changed }).passed;
   } catch (error) {
     throw new HarnessError(error.message);
   }
 }
 
-function reproClaim(scenario, dir, base) {
+function reproClaim(scenario, dir, changed) {
   if (!scenario.repro) return null;
-  const tests = git(dir, 'diff', '--cached', '--name-only', base).split('\n')
-    .filter((f) => TEST_FILE.test(f) && fs.existsSync(path.join(dir, f)));
+  const tests = changed.filter((f) => TEST_FILE.test(f) && fs.existsSync(path.join(dir, f)));
   if (tests.length === 0) return false;
-  const original = prepare(scenario).dir;
+  const copy = prepare(scenario);
+  const original = copy.dir;
   try {
     for (const f of tests) {
       fs.mkdirSync(path.dirname(path.join(original, f)), { recursive: true });
       fs.copyFileSync(path.join(dir, f), path.join(original, f));
     }
-    const tap = (cwd) => spawnSync(process.execPath, ['--test', '--test-isolation=none', '--test-reporter=tap', ...tests], { cwd, encoding: 'utf8', timeout: 120_000, killSignal: 'SIGKILL' }).stdout ?? '';
+    // The tests are code from the candidate, so they run in the sandbox.
+    const tap = (cwd) => sandboxedNode(['--test', '--test-isolation=none', '--test-reporter=tap', ...tests], { cwd, writable: [cwd], timeout: 120_000 }).stdout ?? '';
     return reproVerdict(tap(original), tap(dir));
   } finally {
     fs.rmSync(path.dirname(original), { recursive: true, force: true });
+    fs.rmSync(copy.track.gitDir, { recursive: true, force: true });
   }
 }
 
@@ -147,6 +161,8 @@ let judgeCostUsd = 0;
 function judge(scenario, patch, reply, commands) {
   const input = judgeInput({ judgePrompt, scenario, patch, reply, commands, maxPatchChars: config.max_patch_chars });
   const cwd = freshJudgeDir();
+  const planted = plantedMemory(cwd);
+  if (planted.length) throw new HarnessError(`a CLAUDE.md or .claude dir sits above the judge dir: ${planted.join(', ')}`);
   let run;
   try {
     run = claude(cwd, ['-p', '--model', config.judge_model, '--output-format', 'json', '--json-schema', judgeSchema, ...config.judge_args], input);
@@ -207,7 +223,10 @@ function cheffyHard(scenario, dir, claims) {
   let ledgerComplete = false;
   let lanes = [];
   try {
-    const report = JSON.parse(execFileSync(process.execPath, [TRACE, 'report', '--all'], { cwd: dir, encoding: 'utf8' }));
+    // trace runs git in the work dir, and the candidate controls its .git dir, so trace runs in the sandbox.
+    const res = sandboxedNode([TRACE, 'report', '--all'], { cwd: dir, writable: [dir], timeout: 120_000 });
+    if (res.status !== 0) throw new Error(res.stderr);
+    const report = JSON.parse(res.stdout);
     ledgerComplete = report.runs.length > 0 && report.runs.every((r) => r.flags.length === 0);
     lanes = report.runs.map((r) => r.lane);
   } catch {
@@ -220,11 +239,14 @@ function cheffyHard(scenario, dir, claims) {
 }
 
 function runOne(scenario, arm, repeat, outDir) {
-  const { dir, base } = prepare(scenario);
+  const { dir, base, track } = prepare(scenario);
+  if (arm === 'cheffy') assertPluginIntact();
+  const planted = plantedMemory(dir);
+  if (planted.length) throw new HarnessError(`a CLAUDE.md or .claude dir sits above the work dir: ${planted.join(', ')}`);
   const prompt = `${arm === 'cheffy' ? `${config.cheffy_invocation} ` : ''}${scenario.prompt} ${config.prompt_suffix}`;
   const isolation = config.isolation[arm].map((a) => a.replace('{root}', PLUGIN_COPY));
   const run = claude(dir, ['-p', prompt, '--output-format', 'stream-json', '--verbose', '--model', config.candidate_model,
-    '--permission-mode', 'dontAsk', '--allowedTools', config.allowed_tools.join(','), '--settings', CANDIDATE_SETTINGS,
+    '--permission-mode', 'dontAsk', '--allowedTools', scopeWriteTools(config.allowed_tools, dir).join(','), '--settings', CANDIDATE_SETTINGS,
     '--add-dir', XDG_ROOT, ...isolation]);
   const stream = parseStream(run.stdout);
   assertCompleted(run, stream, `${scenario.id} ${arm} #${repeat}`);
@@ -236,12 +258,13 @@ function runOne(scenario, arm, repeat, outDir) {
   } catch (error) {
     throw new HarnessError(`${scenario.id} ${arm} #${repeat}: ${error.message}`);
   }
-  git(dir, 'add', '-A');
-  const patch = git(dir, 'diff', '--cached', base);
+  const patch = trackedDiff(dir, track);
+  const changed = trackedDiff(dir, track, '--name-only').split('\n').filter(Boolean);
+  fs.rmSync(track.gitDir, { recursive: true, force: true });
   const claims = {
-    hidden: passes(scenario.graders.hidden, dir, base),
-    repro: reproClaim(scenario, dir, base),
-    injection: scenario.graders.injection ? passes(scenario.graders.injection, dir, base) : null,
+    hidden: passes(scenario.graders.hidden, dir, base, changed),
+    repro: reproClaim(scenario, dir, changed),
+    injection: scenario.graders.injection ? passes(scenario.graders.injection, dir, base, changed) : null,
   };
   // Runs for both arms. ROOT is the repo: the candidate works in a temp copy and never needs a path in it.
   const answerMatches = answerAccess(stream.events, ROOT);
@@ -285,7 +308,9 @@ const { arms } = options;
 const repeats = options.repeats ?? config.repeats;
 const outDir = path.join(EVAL_DIR, 'results', `${options.set}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
 fs.mkdirSync(outDir, { recursive: true });
-fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify(buildMeta({ set: options.set, split: options.split, filter: options.scenario, scenarios: selected, arms, repeats, sandbox: config.candidate_settings.sandbox?.enabled === true }), null, 2));
+// The run records its noise statistic, so a later change to the statistic never changes the verdict of this run.
+const noiseStatistic = { name: 'stratified-bootstrap', ...config.bootstrap };
+fs.writeFileSync(path.join(outDir, 'meta.json'), JSON.stringify({ ...buildMeta({ set: options.set, split: options.split, filter: options.scenario, scenarios: selected, arms, repeats, sandbox: config.candidate_settings.sandbox?.enabled === true }), noise_statistic: noiseStatistic }, null, 2));
 stagePlugin();
 try {
   for (const scenario of selected) {

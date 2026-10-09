@@ -1,0 +1,10 @@
+[
+  {
+    "id": "2026-spring",
+    "categories": [{ "name": "homework", "weight": 30 }, { "name": "quizzes", "weight": 50 }, { "name": "project", "weight": 20 }],
+    "students": [
+      { "id": "s1", "name": "Ada Park", "scores": [{ "category": "homework", "points": 9, "max": 10 }, { "category": "quizzes", "points": 45, "max": 50 }, { "category": "project", "points": 18, "max": 20 }] },
+      { "id": "s3", "name": "Cleo Diaz", "scores": [{ "category": "homework", "points": 8, "max": 10 }, { "category": "quizzes", "points": 35, "max": 50 }, { "category": "project", "points": 12, "max": 20 }] }
+    ]
+  }
+]

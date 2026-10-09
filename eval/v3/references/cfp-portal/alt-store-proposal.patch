@@ -1,0 +1,74 @@
+diff --git a/src/api/copies.mjs b/src/api/copies.mjs
+index 5710d34..aa92e8a 100644
+--- a/src/api/copies.mjs
++++ b/src/api/copies.mjs
+@@ -16,7 +16,7 @@ export const routes = ({ talks }) => [
+     handle: ({ params, body, caller }) => {
+       const speaker = requireSpeaker(caller);
+       const source = visibleTalk(talks, params.id, caller);
+-      return { status: 201, body: talks.add({ ...mergeChanges(source, body), speakerId: speaker.speakerId }) };
++      return { status: 201, body: talks.addProposal(speaker.speakerId, mergeChanges(source, body)) };
+     },
+   },
+ ];
+diff --git a/src/api/talks.mjs b/src/api/talks.mjs
+index 5f724f4..9c5ee31 100644
+--- a/src/api/talks.mjs
++++ b/src/api/talks.mjs
+@@ -1,5 +1,6 @@
+ import { forbidden } from '../http/errors.mjs';
+ import { requireSpeaker, visibleTalk } from '../talks/access.mjs';
++import { pickSpeakerFields } from '../talks/fields.mjs';
+ import { checkValues } from '../talks/values.mjs';
+ 
+ export const routes = ({ talks }) => [
+@@ -23,7 +24,7 @@ export const routes = ({ talks }) => [
+     handle: ({ body, caller }) => {
+       const speaker = requireSpeaker(caller);
+       const input = checkValues(body, { full: true });
+-      return { status: 201, body: talks.add({ ...input, speakerId: speaker.speakerId }) };
++      return { status: 201, body: talks.addProposal(speaker.speakerId, input) };
+     },
+   },
+   {
+@@ -31,7 +32,7 @@ export const routes = ({ talks }) => [
+     handle: ({ params, body, caller }) => {
+       requireSpeaker(caller);
+       const talk = visibleTalk(talks, params.id, caller);
+-      return { status: 200, body: talks.update(talk.id, checkValues(body)) };
++      return { status: 200, body: talks.update(talk.id, pickSpeakerFields(checkValues(body))) };
+     },
+   },
+ ];
+diff --git a/src/jobs/import-proposals.mjs b/src/jobs/import-proposals.mjs
+index f3677b4..1e5d612 100644
+--- a/src/jobs/import-proposals.mjs
++++ b/src/jobs/import-proposals.mjs
+@@ -9,5 +9,5 @@ export function importProposals({ talks }, { caller, talks: rows }) {
+   const speaker = requireSpeaker(caller);
+   if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_ROWS) throw badRequest(`talks must be a list of 1 to ${MAX_ROWS}`);
+   const checked = rows.map(checkRow);
+-  return { talks: checked.map((row) => talks.add({ ...row, speakerId: speaker.speakerId })) };
++  return { talks: checked.map((row) => talks.addProposal(speaker.speakerId, row)) };
+ }
+diff --git a/src/talks/store.mjs b/src/talks/store.mjs
+index 3b6ed84..a7ee93f 100644
+--- a/src/talks/store.mjs
++++ b/src/talks/store.mjs
+@@ -1,4 +1,5 @@
+ import { notFound } from '../http/errors.mjs';
++import { pickSpeakerFields } from './fields.mjs';
+ 
+ // The talks in memory, in the order they were sent.
+ export function createTalkStore({ clock }) {
+@@ -12,6 +13,10 @@ export function createTalkStore({ clock }) {
+       talks.push(talk);
+       return copy(talk);
+     },
++    // A talk that a speaker sends: only the speaker fields, and it starts as submitted.
++    addProposal(speakerId, fields) {
++      return this.add({ ...pickSpeakerFields(fields), speakerId });
++    },
+     get(id) {
+       const talk = talks.find((t) => t.id === id);
+       if (!talk) throw notFound();

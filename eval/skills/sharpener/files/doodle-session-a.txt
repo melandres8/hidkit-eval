@@ -1,0 +1,21 @@
+Session transcript. The target skill is doodle (skills/doodle). Lines start with the speaker.
+
+[user] Dibújame un diagrama para mi post sobre cómo reviso un PR: leer, probar, comentar, aprobar. Formato inline.
+[assistant] (loads the doodle skill, writes review-flow.svg with 4 nodes: an open book, a test tube, a speech bubble, a stamp. Labels "leer", "probar", "comentar", "aprobar" at font-size 14 under each node. Runs ink.mjs --preset inline. Looks at the PNG.)
+[assistant] Concept: four small objects in a loop, one arrow does a loop-the-loop. Files: doodles/review-flow.png, doodles/review-flow.final.svg.
+[user] Me gusta el concepto y el papel newsprint. Pero en el móvil no se leen las etiquetas, están diminutas.
+[assistant] (raises the label font-size to 30, runs ink.mjs again)
+[user] Ahora sí. Aprobado.
+
+[user] Otro para el post de deploys: build, staging, producción. También inline.
+[assistant] (writes deploy-flow.svg, 3 nodes: a hammer, a small stage with a curtain, a rocket with a dented nose. Labels at font-size 16. Runs ink.mjs --preset inline.)
+[assistant] Concept: a dented rocket at the end of a short road. Files: doodles/deploy-flow.png, doodles/deploy-flow.final.svg.
+[user] Otra vez las letras demasiado pequeñas. Ya te lo había dicho en el anterior.
+[assistant] (raises the label font-size to 32, runs ink.mjs again)
+[user] Bien. Y para este usa papel kraft, que es un post más informal.
+[assistant] (runs ink.mjs --paper kraft)
+[user] Perfecto, me quedo con este.
+
+[user] Uno más, spot, para la sección de bugs: una mariquita con lupa.
+[assistant] (writes ladybug.svg, no labels, runs ink.mjs --preset spot)
+[user] Genial, aprobado.

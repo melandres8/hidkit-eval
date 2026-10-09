@@ -1,0 +1,145 @@
+diff --git a/src/feed/rss.mjs b/src/feed/rss.mjs
+index ed9afbf..3cc98b4 100644
+--- a/src/feed/rss.mjs
++++ b/src/feed/rss.mjs
+@@ -1,26 +1,28 @@
++import { html } from '../lib/html.mjs';
++
+ const SITE = 'https://recipes.example.test';
+ 
+ function item(recipe) {
+-  return `<item>
++  return html`<item>
+ <title>${recipe.title}</title>
+ <link>${SITE}/recipes/${recipe.id}</link>
+ <guid>${SITE}/recipes/${recipe.id}</guid>
+ <pubDate>${new Date(recipe.createdAt).toUTCString()}</pubDate>
+ <dc:creator>${recipe.author}</dc:creator>
+ <description>A recipe with ${recipe.ingredients.length} ingredients.</description>
+-${recipe.tags.map((t) => `<category>${t}</category>`).join('\n')}
+-</item>`;
++${recipe.tags.map((t) => html`<category>${t}</category>
++`)}</item>
++`;
+ }
+ 
+-// RSS 2.0, newest first.
++// RSS 2.0, newest first. Every text goes in through html`...`, which escapes it for XML too.
+ export function rss(recipes) {
+-  return `<?xml version="1.0" encoding="utf-8"?>
++  return html`<?xml version="1.0" encoding="utf-8"?>
+ <rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+ <channel>
+ <title>Recipe board</title>
+ <link>${SITE}/</link>
+ <description>New recipes of the club</description>
+-${recipes.map(item).join('\n')}
+-</channel>
++${recipes.map(item)}</channel>
+ </rss>`;
+ }
+diff --git a/src/views/comments.mjs b/src/views/comments.mjs
+index 74876af..8a4648a 100644
+--- a/src/views/comments.mjs
++++ b/src/views/comments.mjs
+@@ -1,10 +1,12 @@
++import { html } from '../lib/html.mjs';
++
+ export function commentsView(comments) {
+-  if (comments.length === 0) return '<section class="comments"><p>No comments yet.</p></section>';
+-  const items = comments.map((c) => `<li><strong>${c.author}</strong>: ${c.text}</li>`).join('\n');
+-  return `<section class="comments">
++  if (comments.length === 0) return html`<section class="comments"><p>No comments yet.</p></section>`;
++  const items = comments.map((c) => html`<li><strong>${c.author}</strong>: ${c.text}</li>
++`);
++  return html`<section class="comments">
+ <h2>${comments.length} comments</h2>
+ <ul>
+-${items}
+-</ul>
++${items}</ul>
+ </section>`;
+ }
+diff --git a/src/views/layout.mjs b/src/views/layout.mjs
+index 96134f8..54e3056 100644
+--- a/src/views/layout.mjs
++++ b/src/views/layout.mjs
+@@ -1,6 +1,8 @@
+-// The frame of every page.
++import { html, raw } from '../lib/html.mjs';
++
++// The frame of every page. content is markup that a view made.
+ export function layout({ title, content }) {
+-  return `<!doctype html>
++  return html`<!doctype html>
+ <html lang="en">
+ <head>
+ <meta charset="utf-8">
+@@ -9,7 +11,7 @@ export function layout({ title, content }) {
+ </head>
+ <body>
+ <header><a href="/">Recipe board</a> <form action="/search"><input name="q"></form></header>
+-<main>${content}</main>
++<main>${raw(content)}</main>
+ </body>
+ </html>`;
+ }
+diff --git a/src/views/recipe.mjs b/src/views/recipe.mjs
+index b44ec5c..37968d7 100644
+--- a/src/views/recipe.mjs
++++ b/src/views/recipe.mjs
+@@ -1,18 +1,19 @@
++import { html } from '../lib/html.mjs';
+ import { commentsView } from './comments.mjs';
+ 
+-const paragraphs = (steps) => steps.split(/\n{2,}/).filter(Boolean).map((p) => `<p>${p}</p>`).join('\n');
+-const tagLinks = (tags) => tags.map((t) => `<a class="tag" href="/tags/${encodeURIComponent(t)}">${t}</a>`).join(' ');
++const paragraphs = (steps) => steps.split(/\n{2,}/).filter(Boolean).map((p) => html`<p>${p}</p>
++`);
++const tagLinks = (tags) => tags.map((t, i) => html`${i ? ' ' : ''}<a class="tag" href="/tags/${encodeURIComponent(t)}">${t}</a>`);
+ 
+ export function recipeView(recipe) {
+-  return `<article class="recipe">
++  return html`<article class="recipe">
+ <h1>${recipe.title}</h1>
+ <p class="byline">By ${recipe.author}</p>
+ <ul class="ingredients">
+-${recipe.ingredients.map((line) => `<li>${line}</li>`).join('\n')}
+-</ul>
++${recipe.ingredients.map((line) => html`<li>${line}</li>
++`)}</ul>
+ <section class="steps">
+-${paragraphs(recipe.steps)}
+-</section>
++${paragraphs(recipe.steps)}</section>
+ <p class="tags">${tagLinks(recipe.tags)}</p>
+ ${commentsView(recipe.comments)}
+ </article>`;
+diff --git a/src/views/search.mjs b/src/views/search.mjs
+index 4580d81..373a406 100644
+--- a/src/views/search.mjs
++++ b/src/views/search.mjs
+@@ -1,13 +1,17 @@
+-// Puts <mark> around the first match of q in text.
++import { html } from '../lib/html.mjs';
++
++// Puts <mark> around the first match of q in text. Each part of the text is escaped.
+ function markFirst(text, q) {
+   const at = text.toLowerCase().indexOf(q.toLowerCase());
+-  if (at === -1) return text;
+-  return `${text.slice(0, at)}<mark>${text.slice(at, at + q.length)}</mark>${text.slice(at + q.length)}`;
++  if (at === -1) return html`${text}`;
++  return html`${text.slice(0, at)}<mark>${text.slice(at, at + q.length)}</mark>${text.slice(at + q.length)}`;
+ }
+ 
+ export function searchView(q, recipes) {
+-  const items = recipes.map((r) => `<li><a href="/recipes/${r.id}">${markFirst(r.title, q)}</a> by ${r.author}</li>`).join('\n');
+-  return `<form action="/search"><input name="q" value="${q}"></form>
++  const items = recipes.map((r) => html`<li><a href="/recipes/${r.id}">${markFirst(r.title, q)}</a> by ${r.author}</li>
++`);
++  return html`<form action="/search"><input name="q" value="${q}"></form>
+ <h1>Results for ${q}</h1>
+-${recipes.length ? `<ul class="results">\n${items}\n</ul>` : '<p>No recipe matches.</p>'}`;
++${recipes.length ? html`<ul class="results">
++${items}</ul>` : html`<p>No recipe matches.</p>`}`;
+ }

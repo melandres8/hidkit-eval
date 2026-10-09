@@ -23,8 +23,9 @@ The method follows [Automating eval design and hillclimbing](https://claude.dev/
 | `eval/report.mjs` | The report and the verdict of one results directory. |
 | `eval/lib/` | Harness, grader, score, and validation code. |
 | `eval/v2/` | The easy set: the no-regression and cost gate. |
-| `eval/v3/` | The hard set: the quality gate, with a train and a test split. |
+| `eval/v3/` | The hard set: the quality gate, with a train and a test split. A retired scenario stays for the record; only `--split retired` runs it. |
 | `eval/fixtures/`, `eval/graders/`, `eval/scenarios.json` | The first set (v1). |
+| `eval/skills/` | The skill evals: the cases of each Hidkit skill and their runner. See [docs/evals/skill-evals.md](docs/evals/skill-evals.md). |
 | `docs/evals/` | The scenario catalogs and the measurement reports. |
 | `docs/specs/cheffy-design.md` | The design of Cheffy and the reason for each decision. |
 | `eval/results/` | Run output. Git ignores it. |
@@ -35,6 +36,7 @@ The method follows [Automating eval design and hillclimbing](https://claude.dev/
 - A Hidkit checkout. By default the runner uses `../hidkit`. Set `HIDKIT_DIR` to use another path.
 - The `claude` CLI, logged in with a subscription in the config directory `~/.claude-eval`. The runner removes `ANTHROPIC_API_KEY`, so a run never bills the API.
 - `semgrep`, `osv-scanner`, and `gitleaks` on `PATH`, for the security gate of the Cheffy arm.
+- macOS with `/usr/bin/sandbox-exec`. The graders, the repro check, and `trace report` run code from the candidate, so they run in a sandbox: no network, writes only to the work dir, no host env vars except a short allowlist, and no binary except node and git. On another system the runner refuses to grade.
 
 ## Usage
 
