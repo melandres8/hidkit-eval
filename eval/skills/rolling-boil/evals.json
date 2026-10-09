@@ -1,0 +1,55 @@
+{
+  "skill_name": "rolling-boil",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Dale vida a este doodle para mi post de Substack: transcripts/plant.svg. Es una planta que nadie riega.",
+      "expected_output": "The model copies the drawing to transcripts/plant.anim.svg and leaves transcripts/plant.svg unchanged. It picks one main motion that serves the idea, such as a slow sway of the wilted plant from its pot or a leaf that falls in 2 poses, and at most 2 small motions. Each motion is a <g> with data-motion and no transform attribute. It runs motion.mjs with --preset cover, which writes transcripts/plant.motion.svg. The sandbox can block Chrome, so a missing GIF is acceptable when the reply says why. The reply is in Spanish, names the main motion and why it helps the idea, gives the file paths, and says that Substack takes the GIF and that the SVG is for the web.",
+      "files": ["files/plant.svg"],
+      "expectations": [
+        "transcripts/plant.anim.svg exists and has at least one <g> with a data-motion attribute.",
+        "No <g> with data-motion in transcripts/plant.anim.svg has a transform attribute.",
+        "transcripts/plant.anim.svg has at most 3 groups with data-motion, not counting the poses of one swap or the 2 faces of one blink as separate motions.",
+        "The reply explains how the main motion helps the idea of the drawing, such as the neglect or the wilting of the plant.",
+        "The reply is in Spanish and says that the GIF is for Substack and the animated SVG is for the web.",
+        "No file under transcripts/plant.svg changed."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Anima transcripts/coffee.svg: quiero que el personaje parpadee y que salga vapor de la taza. Nada exagerado.",
+      "expected_output": "The model wraps the open face of the character in a blink group with data-frame=\"open\" and adds #char-face-blink with the same transform in a blink group with data-frame=\"closed\". The steam paths go in a flow group, and each path starts at the cup and ends at the top. A breathe group around the full character is optional. No other part moves, because the user asked for little motion. The script writes transcripts/coffee.motion.svg. The reply is in Spanish.",
+      "files": ["files/coffee.svg"],
+      "expectations": [
+        "transcripts/coffee.anim.svg has a <g data-motion=\"blink\" data-frame=\"open\"> around the char-face-neutral use, and a <g data-motion=\"blink\" data-frame=\"closed\"> around a use of #char-face-blink with the same transform.",
+        "The 3 steam paths are inside a <g> with data-motion=\"flow\", and each steam path still starts near the cup (y about 740) and goes up.",
+        "The mug, the ground line, and the label lunes are not inside a data-motion group, except inside a breathe group that holds the full character.",
+        "No data-amount value above 1 appears in transcripts/coffee.anim.svg.",
+        "No file under transcripts/coffee.svg changed."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "make transcripts/plant.svg draw itself like a pen sketching it live, then loop. it's the cover of my newsletter.",
+      "expected_output": "The user asks for the draw mode, so the model runs motion.mjs with --draw and --preset cover. The model can keep or add motion groups, but the draw mode is the main motion. If the order of the paths matters, the model can reorder the copy so that the main outlines draw first. The reply is in English and says that the drawing draws itself and then holds before the loop starts again.",
+      "files": ["files/plant.svg"],
+      "expectations": [
+        "The model runs motion.mjs with the --draw flag.",
+        "The reply is in English and describes the drawing being drawn line by line and then held before the loop restarts.",
+        "transcripts/plant.motion.svg exists and contains pathLength=\"1\".",
+        "No file under transcripts/plant.svg changed."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Tengo la portada en PNG, transcripts/cover.png. ¿Le puedes poner movimiento para el newsletter?",
+      "expected_output": "The input is a PNG, and the skill animates only a doodle drawing SVG. The model does not try to animate the PNG and does not invent a drawing that claims to be the user's cover. It asks for the drawing SVG that doodle wrote, or offers to draw the scene again with doodle and then animate it.",
+      "files": [],
+      "expectations": [
+        "The model does not run motion.mjs on a PNG file.",
+        "The reply asks for the drawing SVG of the cover, or offers to draw the scene again with doodle first.",
+        "The model does not write a new SVG that it presents as the user's cover."
+      ]
+    }
+  ]
+}

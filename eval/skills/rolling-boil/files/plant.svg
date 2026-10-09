@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1456 1048">
+<g fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<path d="M380 860 C 600 856, 900 864, 1120 858" stroke-width="3"/>
+<path d="M610 868 C 640 874, 700 876, 760 870 M630 880 C 660 884, 700 884, 740 880" stroke-width="2"/>
+<path d="M690 700 C 686 640, 700 590, 690 540 C 684 510, 660 490, 630 500" stroke-width="5.6"/>
+<path d="M690 610 C 720 580, 760 590, 790 620" stroke-width="5.6"/>
+<path d="M630 500 C 600 500, 580 530, 600 560 C 620 540, 630 520, 630 500 Z" fill="url(#doodle-hatch)"/>
+<path d="M790 620 C 820 640, 830 680, 805 700 C 790 680, 785 650, 790 620 Z" fill="url(#doodle-hatch)"/>
+<path d="M690 660 C 660 650, 640 660, 630 690 C 655 695, 675 685, 690 660 Z" fill="url(#doodle-hatch)"/>
+<path d="M612 532 l0.1 0 M622 528 l0.1 0" stroke-width="5"/>
+<path d="M608 548 C 612 544, 618 544, 622 548" stroke-width="2.5"/>
+<path d="M610 700 C 640 696, 740 696, 770 700 L 755 860 C 720 864, 660 864, 625 860 Z" fill="#fff" stroke-width="5.6"/>
+<path d="M610 718 C 650 722, 730 722, 770 718" stroke-width="4"/>
+<path d="M640 740 L 655 725 M640 770 L 685 725 M642 800 L 715 727 M646 830 L 745 731 M660 850 L 752 758" stroke-width="2"/>
+<path d="M560 620 C 540 610, 525 620, 520 640 C 540 645, 555 638, 560 620 Z" fill="url(#doodle-hatch)"/>
+<text x="860" y="560" font-family="'Bradley Hand', 'Segoe Print', 'Chalkboard', cursive" font-size="36" fill="#000" stroke="none" transform="rotate(-3 860 560)">día 47 sin agua</text>
+<path d="M850 570 C 820 580, 800 590, 790 605" stroke-width="2.5"/>
+</g>
+</svg>
