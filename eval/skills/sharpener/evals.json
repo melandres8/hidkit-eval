@@ -1,0 +1,48 @@
+{
+  "skill_name": "sharpener",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Afila la skill doodle con lo que pasó en esta sesión. La transcripción está en transcripts/doodle-session-a.txt.",
+      "expected_output": "A proposal, not an edit. The style guide of doodle already sets labels at about 2.5 percent of the viewBox width, and the model used smaller labels in 2 uses, so the user corrected the label size twice. The output treats this as a problem to patch: a repeated model slip or a skill defect. The patch makes the rule harder to miss or explains its reason, and states the size relative to the sheet, not as a fixed font-size copied from the session. It records kraft paper as a task preference and keeps the approved newsprint paper and concepts. It proposes regression cases in the skill-creator schema and asks for approval before it edits.",
+      "files": [
+        "files/doodle-session-a.txt"
+      ],
+      "expectations": [
+        "The output proposes a patch for the small diagram labels, as a skill defect or as a repeated model slip, and cites the repeated correction of the user as evidence.",
+        "The proposed rule sets the label size relative to the sheet or the preset, not a fixed value such as 30 or 32 copied from the session.",
+        "The output classifies the kraft paper request as a task preference and does not patch the default paper.",
+        "The output proposes at least one regression case with a prompt that differs from the session prompts and with at least one expectation.",
+        "The output asks the user for approval before any edit.",
+        "No file under skills/doodle changed."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Usé fill-me-in dos veces en esta sesión. ¿Hay algo que afilar? La transcripción está en transcripts/fill-me-in-session.txt.",
+      "expected_output": "The user approved both uses with no correction. The output reports that the session shows no skill defect and proposes no patch. It may propose keep cases for the approved behavior, but it does not invent findings.",
+      "files": [
+        "files/fill-me-in-session.txt"
+      ],
+      "expectations": [
+        "The output states that the session shows no skill defect in fill-me-in.",
+        "The output proposes no change to the text of skills/fill-me-in/SKILL.md or its scripts.",
+        "No file under skills/fill-me-in changed."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "sharpen the doodle skill based on this session, transcript at transcripts/doodle-session-b.txt",
+      "expected_output": "The output finds no skill defect that justifies a patch. The sketchbook paper is a task preference for a special issue. The unchecked PNG is a single model slip: step 6 of the doodle skill already says to look at the PNG, and the slip happened once. The output explains why it does not patch, and asks before any edit.",
+      "files": [
+        "files/doodle-session-b.txt"
+      ],
+      "expectations": [
+        "The output classifies the sketchbook paper request as a task preference.",
+        "The output classifies the cropped mug as a model slip, and notes that the doodle skill already tells the model to look at the PNG.",
+        "The output does not propose to change the default paper of the doodle skill.",
+        "No file under skills/doodle changed."
+      ]
+    }
+  ]
+}
