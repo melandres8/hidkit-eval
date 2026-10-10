@@ -75,7 +75,13 @@ export function attemptedEdits(events, dir) {
     .map((f) => path.relative(dir, f)))];
 }
 
-export const candidateTools = (allowed, dir) => [...scopeWriteTools(allowed, dir), 'Skill'];
+// A skill runs its own scripts, often in a chained command such as `mkdir -p d && node x.mjs`. In dontAsk mode a
+// narrow Bash(<cmd> *) list denies such a command, and the candidate then stops using Bash at all. So the skill evals
+// allow every Bash command and rely on the sandbox of candidate_settings, which limits writes, reads, and network.
+export const candidateTools = (allowed, dir) => {
+  const tools = scopeWriteTools(allowed, dir).filter((t) => !/^Bash\(/.test(t));
+  return [...tools, 'Bash', 'Skill'];
+};
 
 // The candidate settings of config.json, with each extra dir added to the sandbox denyRead list and the Read deny rules.
 export function candidateSettings(base, denied) {
