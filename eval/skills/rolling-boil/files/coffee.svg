@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1456 1048">
+<g fill="none" stroke="#000" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+<path d="M300 902 C 520 898, 900 906, 1180 900" stroke-width="3"/>
+<use href="#char-body-standing" transform="translate(520 900) scale(1.3)"/>
+<use href="#char-head" transform="translate(520 900) scale(1.3)"/>
+<use href="#char-face-neutral" transform="translate(520 900) scale(1.3)"/>
+<path d="M840 900 C 836 840, 838 790, 842 760 C 900 756, 960 757, 1010 762 C 1014 800, 1016 850, 1010 900 Z" fill="#fff" stroke-width="5.6"/>
+<path d="M1010 790 C 1050 788, 1056 840, 1012 850" stroke-width="5.6"/>
+<path d="M860 790 L 880 770 M860 820 L 905 775 M860 850 L 935 775 M862 880 L 965 777" stroke-width="2"/>
+<path d="M900 830 C 905 826, 912 826, 916 830 M940 830 C 945 826, 952 826, 956 830" stroke-width="3"/>
+<path d="M880 740 C 860 700, 900 670, 880 620 C 865 590, 885 560, 878 530" stroke-width="3"/>
+<path d="M930 740 C 910 690, 955 660, 935 600 C 920 560, 945 530, 935 500" stroke-width="3"/>
+<path d="M975 740 C 960 705, 995 680, 980 640" stroke-width="3"/>
+<text x="1040" y="660" font-family="'Bradley Hand', 'Segoe Print', 'Chalkboard', cursive" font-size="36" fill="#000" stroke="none" transform="rotate(-3 1040 660)">lunes</text>
+</g>
+</svg>

@@ -55,3 +55,16 @@ Sharpener sharpens a skill with the corrections and approvals of a session. Its 
 | 3 | `doodle-session-b.txt` | The user wants sketchbook paper once. The model forgets once to look at the PNG, which the skill already requires. | A task preference and a single model slip. The taste check asks only about cut labels, so a patch that checks every element at the edges is allowed. No other patch. |
 
 Case 2 catches a sharpener that always proposes a change. Case 3 catches one that turns a one-time preference or a single slip into a rule.
+
+## Rolling-boil
+
+Rolling-boil animates a doodle. Its cases give it a drawing SVG and a request. A good output marks the moving parts with `data-motion` groups in a copy of the drawing, runs `motion.mjs`, and keeps the drawing SVG unchanged. The sandbox can block headless Chrome, so the cases grade the animation source and the animated SVG, not the GIF.
+
+| id | Input | Trap | Good output |
+|---|---|---|---|
+| 1 | `plant.svg` | The user asks for life with no motion named. | One main motion that serves the idea, such as a sway from the pot or a falling leaf, and at most 2 small ones. A reply in Spanish that says the GIF is for Substack. |
+| 2 | `coffee.svg` | The user asks for a blink and steam, with little motion. | A blink with the open and the closed face, steam in a flow group from the cup up, and no other motion. |
+| 3 | `plant.svg` | The user asks in English for the drawing to draw itself. | A run with `--draw`. |
+| 4 | none | The user has only a PNG. | No animation of the PNG. A request for the drawing SVG, or an offer to draw the scene again with doodle. |
+
+Case 2 catches a model that adds motion that the user did not ask for. Case 4 catches one that animates an input that the skill does not take.
