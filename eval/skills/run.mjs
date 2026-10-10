@@ -46,6 +46,12 @@ const CLAUDE_ENV = buildEnv(process.env, CONFIG_DIR, os.homedir());
 // The candidate cannot read the Hidkit checkout, its main checkout when it is a worktree, or this repository.
 // Otherwise the without_skill arm could read the skill under measurement.
 const HIDKIT_MAIN = path.dirname(safeGit(HIDKIT, 'rev-parse', '--path-format=absolute', '--git-common-dir'));
+// The candidate gets every Bash command (see candidateTools), so the sandbox MUST be on and MUST NOT let a command out.
+const { sandbox } = config.candidate_settings;
+if (!sandbox?.enabled || !sandbox.failIfUnavailable || sandbox.allowUnsandboxedCommands !== false) {
+  console.error('eval/config.json: the skill evals allow every Bash command, so candidate_settings.sandbox needs enabled, failIfUnavailable, and allowUnsandboxedCommands: false.');
+  process.exit(2);
+}
 const CANDIDATE_SETTINGS = JSON.stringify(candidateSettings(config.candidate_settings, [ROOT, HIDKIT, HIDKIT_MAIN]));
 // The candidate sees this path, so the prefix is neutral.
 const EVAL_ROOT = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-')));
