@@ -1,0 +1,17 @@
+{
+  "skill_name": "doodle",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Necesito una portada para mi newsletter sobre reuniones que podrían haber sido un email. Algo simple.",
+      "expected_output": "The model draws a doodle and runs ink.mjs. The reply names the path of the PNG, the path of the final SVG, and the path of the drawing SVG <slug>.svg, because rolling-boil animates the drawing SVG. When the files are in the scratchpad, the reply tells the user to keep the drawing SVG, because the scratchpad is temporary. The reply is in Spanish.",
+      "files": [],
+      "expectations": [
+        "The reply names the path of the drawing SVG, a path that ends in .svg and not in .final.svg.",
+        "The reply names the path of the final SVG.",
+        "If the files are in the scratchpad directory of the session, the reply tells the user to keep the drawing SVG.",
+        "The reply is in Spanish."
+      ]
+    }
+  ]
+}

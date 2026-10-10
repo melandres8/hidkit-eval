@@ -74,3 +74,13 @@ Rolling-boil animates a doodle. Its cases give it a drawing SVG and a request. A
 Case 2 catches a model that adds motion that the user did not ask for. Case 4 catches one that animates an input that the skill does not take.
 
 Cases 5 to 7 come from the sharpener session of 2026-10-10 on `rata-cubiculo`. Case 8 is a keep case: it catches a particle rule that turns every small motion into a `swap`.
+
+## Doodle
+
+Doodle draws a still image. Its cases give it the idea of a post.
+
+| id | Input | Trap | Good output |
+|---|---|---|---|
+| 1 | none | The user will later animate the drawing with rolling-boil. | A reply that names the PNG, the final SVG, and the drawing SVG `<slug>.svg`. In the scratchpad, a reminder to keep the drawing SVG. |
+
+Case 1 comes from the rolling-boil session of 2026-10-10. The user had only the final SVG, because the reply of doodle did not name the drawing SVG.
