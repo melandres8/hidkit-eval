@@ -50,6 +50,57 @@
         "The reply asks for the drawing SVG of the cover, or offers to draw the scene again with doodle first.",
         "The model does not write a new SVG that it presents as the user's cover."
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "Anima transcripts/plant.final.svg para mi post. Es el único SVG que me dejó doodle.",
+      "expected_output": "The user has only the final SVG. The model does not stop to ask for another file and does not redraw the scene. It copies the content of <g filter=\"url(#doodle-ink)\"> into transcripts/plant.anim.svg, a new <svg> with the viewBox 0 0 1456 1048, and leaves out the doodle-retrace copy. It adds the motion groups and runs motion.mjs with --preset cover. The reply is in Spanish.",
+      "files": ["files/plant.final.svg"],
+      "expectations": [
+        "The model does not ask the user for a drawing SVG and does not run doodle again.",
+        "transcripts/plant.anim.svg exists and has no filter=\"url(#doodle- attribute.",
+        "transcripts/plant.anim.svg contains the text día 47 sin agua exactly once.",
+        "transcripts/plant.anim.svg has at least one <g> with a data-motion attribute.",
+        "The model runs motion.mjs on transcripts/plant.anim.svg, and the run writes transcripts/plant.motion.svg.",
+        "No file under transcripts/plant.final.svg changed."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "En transcripts/coffee.svg quiero que el personaje sude a mares por los nervios. Que se note en el GIF.",
+      "expected_output": "Sweat drops are particles, so they come out of the head and move away. The model draws the drops in a swap of 3 poses with data-period 1.2: small on the skin, then full size, then farther from the head. Each pose holds 2 drops at different stages. Each drop is at least 30 units wide. The drops do not touch the face, the mug, or the label in any pose. The model looks at an enlarged crop of the drops before the reply.",
+      "files": ["files/coffee.svg"],
+      "expectations": [
+        "transcripts/coffee.anim.svg has 3 groups with data-motion=\"swap\" and data-frame 1/3, 2/3, and 3/3 that hold the sweat drops.",
+        "Each swap group of the sweat drops has data-period=\"1.2\".",
+        "No sweat drop is inside a group with data-motion=\"pulse\".",
+        "In pose 1/3, a drop is within 20 units of the outline of the head. In pose 3/3, the same drop is farther from the head than in pose 1/3.",
+        "At its largest pose, each sweat drop is at least 30 units wide in the coordinates of the drawing, after its transforms.",
+        "No run of motion.mjs exits with 2 for a swap period problem."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "animate transcripts/coffee.svg with a tiny spark that pops off the mug now and then. keep it subtle.",
+      "expected_output": "The spark is a small moving part, so the frame sheet at half size does not show it well. After the run, the model crops the spark from transcripts/coffee.frames.png with ffmpeg, enlarges the crop, and looks at it before the reply. The spark moves away from the mug in poses and does not cover the label. The reply is in English.",
+      "files": ["files/coffee.svg"],
+      "expectations": [
+        "If transcripts/coffee.frames.png exists, the model runs ffmpeg with a crop filter on it and reads the enlarged crop. If it does not exist, the reply says that the motion was not checked in the frames.",
+        "The spark is in a swap group, and its pose 1/3 is closer to the mug than its pose 3/3.",
+        "The reply is in English."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Ponle a transcripts/plant.svg un corazoncito que late junto a la maceta, como si la planta aún tuviera esperanza.",
+      "expected_output": "A heart that beats stays in place, so it is not a particle. The model draws a heart near the pot and wraps it in a pulse group, not in a swap of poses. The heart is at least 30 units wide. The reply is in Spanish.",
+      "files": ["files/plant.svg"],
+      "expectations": [
+        "The heart in transcripts/plant.anim.svg is inside a <g> with data-motion=\"pulse\".",
+        "The heart is not inside a <g> with data-motion=\"swap\".",
+        "The heart is at least 30 units wide in the coordinates of the drawing.",
+        "No file under transcripts/plant.svg changed."
+      ]
     }
   ]
 }

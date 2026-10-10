@@ -66,5 +66,11 @@ Rolling-boil animates a doodle. Its cases give it a drawing SVG and a request. A
 | 2 | `coffee.svg` | The user asks for a blink and steam, with little motion. | A blink with the open and the closed face, steam in a flow group from the cup up, and no other motion. |
 | 3 | `plant.svg` | The user asks in English for the drawing to draw itself. | A run with `--draw`. |
 | 4 | none | The user has only a PNG. | No animation of the PNG. A request for the drawing SVG, or an offer to draw the scene again with doodle. |
+| 5 | `plant.final.svg` | The user has only the final SVG of doodle. | The drawing extracted from the `doodle-ink` group, with no filter and one copy of the lines, and a run of `motion.mjs`. No request for another file. |
+| 6 | `coffee.svg` | The user wants the character to sweat. | Drops in a `swap` of 3 poses with `data-period` 1.2, from the head outward, each at least 30 units wide at full size. No `pulse`. |
+| 7 | `coffee.svg` | The user wants a tiny spark. | An enlarged ffmpeg crop of the spark from the frame sheet before the reply. When the sandbox blocks Chrome, a reply that says the frames were not checked. |
+| 8 | `plant.svg` | The user wants a heart that beats. | The heart in a `pulse` group, not in a `swap`. |
 
 Case 2 catches a model that adds motion that the user did not ask for. Case 4 catches one that animates an input that the skill does not take.
+
+Cases 5 to 7 come from the sharpener session of 2026-10-10 on `rata-cubiculo`. Case 8 is a keep case: it catches a particle rule that turns every small motion into a `swap`.
